@@ -110,6 +110,11 @@ alongside; "Sounds good" moves them to the Recycle Bin. The app writes a log to 
 
 Each tool also runs on its own from the command line (`.venv\Scripts\python.exe tools\<name>.py --help`).
 
+## Contributing
+
+Bug reports and pull requests are welcome: see [CONTRIBUTING.md](CONTRIBUTING.md). Please report
+security problems privately, as described in [SECURITY.md](SECURITY.md).
+
 ## License
 
 Audioworks is free software under the [GNU General Public License v3.0](LICENSE) (GPL-3.0): you may

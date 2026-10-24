@@ -1,0 +1,64 @@
+name: Bug report
+description: Something in Audioworks doesn't work as it should
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting. Please don't attach songs, recordings or lyrics: the log below is enough.
+        Security problems go through the Security tab instead (see SECURITY.md).
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What you did, step by step, and what went wrong.
+      placeholder: "1. Pasted a YouTube link in step 1\n2. Clicked Get song and prepare\n3. The app closed while splitting"
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: What you expected
+    validations:
+      required: true
+  - type: dropdown
+    id: step
+    attributes:
+      label: Where
+      options:
+        - "Step 1: getting or preparing a song"
+        - "Step 2: recording, uploading or lyrics"
+        - "Step 3: making or downloading the cover"
+        - "Connecting or using an AI assistant"
+        - "Installing"
+        - "Something else"
+    validations:
+      required: true
+  - type: dropdown
+    id: sound
+    attributes:
+      label: Is it about how the cover sounds?
+      description: For example a missing or extra effect, timing, pitch or level compared with the original.
+      options:
+        - "No"
+        - "Yes"
+  - type: input
+    id: version
+    attributes:
+      label: Audioworks version
+      placeholder: "1.0.0"
+    validations:
+      required: true
+  - type: input
+    id: system
+    attributes:
+      label: Windows version and GPU
+      placeholder: "Windows 11, NVIDIA RTX 3060 (or no NVIDIA GPU)"
+    validations:
+      required: true
+  - type: textarea
+    id: log
+    attributes:
+      label: End of audioworks.log
+      description: From the app's folder; the last 50 lines or so are usually enough.
+      render: text
