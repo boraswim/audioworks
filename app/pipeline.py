@@ -1,4 +1,6 @@
-"""Audioworks engine: runs the tools/ pipeline with per-song rules, no human or AI in the loop.
+"""Audioworks engine: runs the tools/ pipeline with per-song rules. Settings come from measuring the
+original, or from the plan of the user's connected AI assistant (app/assistant.py), checked against
+the same rules; nobody adjusts anything by hand.
 
 The same song folders and audioworks.json notes are used by the desktop app and by the
 chat workflow (the audioworks skill), so a song can move between them.
@@ -171,6 +173,11 @@ def prepare(folder, log=print):
         run_tool("separate", folder / "song.mp3", log=log)
     log("Analyzing the original...")
     run_tool("analyze_song", folder, log=log)
+    log("Checking the song for special vocal effects (vocoder, talk box)...")
+    try:
+        run_tool("song_features", folder, log=log)
+    except PipelineError as e:  # the cover can still be made from the measurements alone
+        log(f"Feature check failed ({e})")
     notes = songfile.load(folder)
     if notes.get("status") in (None, "imported", "analyzed"):
         notes["status"] = "analyzed"
@@ -179,6 +186,11 @@ def prepare(folder, log=print):
         if info:
             notes["lyrics"] = info
     songfile.save(folder, notes)
+    from app import assistant
+
+    if assistant.connected():
+        assistant.study(folder, log)
+        notes = songfile.load(folder)
     return notes
 
 
@@ -217,16 +229,30 @@ def summary(notes):
         f"Vocals: {', '.join(an['vocal_sections'])}",
         f"Range {an['range'][0]}-{an['range'][1]}, centered on {an['range_median']}",
         f"Original vocal: {an['pitch_style'].lower()}, {'wide stereo' if an['wide'] else 'centered'}, "
-        f"room tail {an['room_tail_db']:.0f} dB, sits {an['vocal_vs_instrumental_lu']:+.1f} dB vs the music",
+        + (f"{an['reverb_s']:.1f} s {'stereo ' if an.get('reverb_stereo') else ''}reverb" if an.get("reverb_s")
+           else "no reverb" if "reverb_s" in an else f"room tail {an['room_tail_db']:.0f} dB")
+        + f", sits {an['vocal_vs_instrumental_lu']:+.1f} dB vs the music",
     ]
     plain = {"--max-cut 40": "deep tone matching (very dark original)", "--hiss": "tape hiss"}
     extras = [plain.get(f, f) for f in rec.get("match_flags", [])]
     if rec.get("widen"):
         extras.append("stereo widening")
-    if rec.get("vocoder_optional"):
-        extras.append("robotic/vocoder version available")
+    if rec.get("distortion"):
+        extras.append("amp distortion")
+    feats = notes.get("features", {})
+    if feats.get("vocoder"):
+        extras.append("vocoder")
     if extras:
         lines.append("Treatment: " + ", ".join(extras))
+    if feats.get("why"):
+        lines.append(f"Vocoder check: {feats['why']}")
+    plan = notes.get("assistant_plan")
+    if plan:
+        from app import assistant
+
+        lines.append(f"\nPlan by {plan.get('by', 'your assistant')} ({plan.get('made', '')}): {assistant.describe(plan)}")
+        if plan.get("notes"):
+            lines.append(plan["notes"])
     return "\n".join(lines)
 
 
@@ -300,6 +326,14 @@ def process(folder, take, options=None, log=print):
     rec = notes.get("recommended")
     if not rec:
         raise PipelineError("Prepare the song first (step 1)")
+    from app import assistant
+
+    rec, planned = assistant.apply(notes, rec)
+    for k, v in planned.items():
+        if opts[k] is None or (k == "above" and "above" not in (options or {})):
+            opts[k] = v
+    if planned:
+        log(f"Using {notes['assistant_plan'].get('by', 'the assistant')}'s plan for this song")
     if opts["hiss"] is None:
         opts["hiss"] = "--hiss" in rec.get("match_flags", [])
     if opts["widen"] is None:
@@ -307,9 +341,18 @@ def process(folder, take, options=None, log=print):
     if opts["distortion"] is None:
         opts["distortion"] = bool(rec.get("distortion"))
     if opts["vocoder"] is None:
-        # a vocoder can't be detected by measurement, so it's only used where the user chose the vocoder
-        # version of this song before (recorded in its notes)
-        opts["vocoder"] = notes.get("final", {}).get("version") == "vocoder"
+        # a version the user picked in chat work wins; otherwise song_features.py decided at prepare time
+        if "features" not in notes:  # prepared before the feature check existed
+            try:
+                run_tool("song_features", folder, log=log)
+                notes = songfile.load(folder)
+            except PipelineError as e:
+                log(f"Feature check failed ({e})")
+        final = notes.get("final", {})
+        if final.get("version") and final.get("made_with") != "app":
+            opts["vocoder"] = final["version"] == "vocoder"
+        else:
+            opts["vocoder"] = bool(notes.get("features", {}).get("vocoder"))
     tk = notes.setdefault("takes", {}).setdefault(take, {})
     cache = tk.setdefault("app_cache", {})
     f = lambda suffix: folder / f"{take}_{suffix}.wav"  # noqa: E731

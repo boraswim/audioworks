@@ -5,39 +5,67 @@ back the song with your voice in it, processed to sound like the original vocal:
 correction, tone, compression, room, stereo width, distortion, tape hiss and loudness are all
 measured from the original and matched automatically.
 
-Everything runs on your own PC. There's no AI service or account involved; the one machine-learning
-component, the vocal/instrumental splitter ([Demucs](https://github.com/facebookresearch/demucs)),
-runs locally. Everything else is classic signal processing.
+Everything runs on your own PC, with no account needed. The one machine-learning component, the
+vocal/instrumental splitter ([Demucs](https://github.com/facebookresearch/demucs)), runs locally;
+everything else is classic signal processing. The only online lookups are lyrics from LRCLIB and the
+song's Wikipedia article. You can optionally connect an AI assistant you already use to plan your
+covers (see below).
 
 ## Using it
 
 1. **Song**: choose a local audio file (any common format), or paste a YouTube or SoundCloud link.
    Only download songs you have the rights to use; downloading may be against the platform's terms.
    The app splits the song into vocal and instrumental, analyzes how the original vocal was produced,
-   and looks up synced lyrics.
+   checks the song for effects that measuring alone can't settle (a vocoder or talk box, from the
+   song's Wikipedia article and the vocal itself), and looks up synced lyrics.
 2. **Vocals**: record in the app. The song plays in your headphones while your mic records, with a
    one-second count-in, and the lyrics scroll karaoke-style. Or upload a recording you made yourself
    (start recording before you start the song).
 3. **Result**: click "Make my cover". There's nothing to set: pitch correction, timing, your vocal
-   level and the vocal's effects (amp distortion, tape hiss, stereo width) are all matched to the
-   original automatically. Listen, download the WAV and MP3, and click "Sounds good" to tidy the
+   level and the vocal's effects (amp distortion, tape hiss, stereo width, vocoder) are all matched
+   to the original automatically. Listen, download the WAV and MP3, and click "Sounds good" to tidy the
    song's folder.
 
-## Setup
+## Install
 
-Requires Windows, Python 3.11 and [uv](https://docs.astral.sh/uv/). An NVIDIA GPU makes splitting
-songs much faster; it works on the CPU too, just slower.
+1. Download `Audioworks-<version>-windows.zip` from the
+   [latest release](https://github.com/boraswim/audioworks/releases/latest) and unzip it where you want
+   the app to live (it keeps your songs in that folder too).
+2. Double-click **`Install Audioworks.bat`**. It installs Python 3.11 and the app's libraries into the
+   folder (about 3 GB with an NVIDIA GPU, which makes splitting songs much faster; less without one,
+   where splitting takes several minutes), and adds Desktop and Start menu shortcuts.
+3. Start Audioworks from the shortcut. The vocal splitter's model (about 300 MB) downloads the first
+   time you prepare a song.
+
+Running the installer again repairs or updates the install.
+
+### From source
+
+Requires Windows, Python 3.11 and [uv](https://docs.astral.sh/uv/). `Install Audioworks.bat` works in a
+clone too; or by hand:
 
 ```
 uv venv .venv --python 3.11
 uv pip install --python .venv\Scripts\python.exe -r requirements.txt --extra-index-url https://download.pytorch.org/whl/cu126 --index-strategy unsafe-best-match
 ```
 
-Start the app by double-clicking `Audioworks.bat`, or run `.venv\Scripts\pythonw.exe -m app`.
-For a shortcut with the app icon, create one that runs `.venv\Scripts\pythonw.exe -m app` in the
-project folder, with `app\assets\audioworks.ico` as its icon.
+Then start the app with `Audioworks.bat` or `.venv\Scripts\pythonw.exe -m app`.
 
-The Demucs model downloads automatically the first time a song is split.
+## AI assistant (optional)
+
+Click **Connect AI assistant** (above "+ New song") to let an assistant you already use plan your
+covers: **Gemini** (Google account), **ChatGPT / Codex** (ChatGPT account) or **Claude** (Claude
+account). The dialog installs the assistant's official command-line app (needs
+[Node.js](https://nodejs.org)) and opens its sign-in; your account stays with that app on your PC, and
+Audioworks has no server and stores no keys.
+
+Once connected, preparing a song ends with the assistant reading the measurements and the Audioworks
+guide (`app/assistant_skill.md`), adding what it knows about the record, and writing a plan: pitch
+correction, de-essing, tone, hiss, distortion, double-tracking, vocoder and your vocal level. The app
+checks the plan against the same rules (for example, pitch correction never moves a note more than
+1.5 semitones) and builds the cover from it. "Ask ... to plan this song" re-plans an existing song.
+The assistant may only write its plan file; the AI itself runs on its company's servers. Without an
+assistant, everything is decided automatically from the measurements.
 
 ## Where things are kept
 
@@ -64,10 +92,12 @@ alongside; "Sounds good" moves them to the Recycle Bin. The app writes a log to 
 | `app/main.py` | The 3-step window (PySide6) |
 | `app/pipeline.py` | The engine: import or download, prepare, process a take with per-song rules, export, tidy up |
 | `app/recorder.py` | In-app recording: plays the song and records the mic in one duplex audio stream |
+| `app/assistant.py`, `app/assistant_skill.md` | Optional AI assistant: connecting it, asking it for a plan, checking that plan; its guide |
 | `app/lyrics.py` | Synced lyrics: LRCLIB lookup, LRC parsing, automatic sync to the song, timing for plain lyrics |
 | `app/make_icon.py` | Draws the app icon into `app/assets/` |
 | `tools/separate.py` | Splits a song into vocal and instrumental (Demucs) |
 | `tools/analyze_song.py` | Key, tempo, vocal sections and range, how the original vocal is produced, recommended settings |
+| `tools/song_features.py` | Decides whether the cover needs a vocoder: what's written about the song plus a check of the vocal |
 | `tools/align.py` | Measures where a recording starts relative to the song and lines it up |
 | `tools/autotune.py` | Pitch correction toward the original melody (PSOLA) |
 | `tools/deess.py` | Tames harsh "s" sounds |

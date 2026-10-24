@@ -18,3 +18,6 @@ Audioworks.lnk
 tools/check_exports.py
 tools/compare.py
 tools/harmony.py
+
+# Your connected AI assistant (machine-specific)
+audioworks_settings.json

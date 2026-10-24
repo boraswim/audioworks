@@ -4,8 +4,10 @@ Measures the reference, then applies to your vocal:
   1. matching EQ (smoothed, boosts capped so it never amplifies what isn't there)
   2. a leveler (plus a lift for soft individual words) and compression, chosen to reach
      the reference's loudness evenness
-  3. room: a small synthetic room if your take is drier than the reference, or an expander
-     between phrases if it's roomier, chosen to match the reference's room tail
+  3. room: if your take is drier than the reference, a reverb with the reference's own decay
+     time, as quiet as matches its room tail (none when what follows the reference's phrases
+     doesn't decay, i.e. it's bleed or noise); an expander between phrases if your take is
+     roomier. A stereo reverb in the reference becomes a stereo room (stereo output)
   4. perceived loudness (LUFS), matched to the reference (--gain to sit louder/quieter)
   5. a peak limiter matching the reference's peak-to-average ratio (never above -1 dBFS)
   6. with --hiss: steady noise matching the reference's noise floor (tape hiss on old recordings)
@@ -168,9 +170,11 @@ def lufs(m, sr):
 def limit(m, sr, ceiling_db):
     """Brickwall peak limiter: no sample above the ceiling, gain changes smoothed over ~3 ms."""
     w = int(0.003 * sr)
-    need = np.minimum(1.0, 10 ** (ceiling_db / 20) / np.maximum(np.abs(m), 1e-12))
+    peak = np.abs(m).max(axis=1) if m.ndim == 2 else np.abs(m)  # stereo: both channels get the same gain
+    need = np.minimum(1.0, 10 ** (ceiling_db / 20) / np.maximum(peak, 1e-12))
     # min over +-w then mean over w keeps every sample's gain at or below what it needs
-    return m * uniform_filter1d(minimum_filter1d(need, 2 * w + 1), w + 1)
+    g = uniform_filter1d(minimum_filter1d(need, 2 * w + 1), w + 1)
+    return m * (g[:, None] if m.ndim == 2 else g)
 
 
 def compress(m, sr, ratio, threshold_db):
@@ -202,6 +206,49 @@ def add_room(m, sr, wet_db, rt60=0.6, seed=3):
     ir[: int(0.008 * sr)] = 0  # ~8 ms before the first reflections
     ir /= np.sqrt(np.sum(ir ** 2))
     return m + oaconvolve(m, ir)[: len(m)] * 10 ** (wet_db / 20)
+
+
+def side_mid_db(side, mid, mask):
+    return db(np.sqrt(np.mean(side[mask] ** 2)) / max(np.sqrt(np.mean(mid[mask] ** 2)), 1e-12))
+
+
+def reverb_profile(ref, sr):
+    """The reference's reverb, read from what follows its phrases.
+
+    rt60: decay time in seconds, or None when the gaps hold steady sound (instrument bleed, noise)
+          instead of something decaying: then there's no reverb to copy, whatever the tail level says
+    stereo: the gaps are as wide as they are loud (side ~ mid), so the reverb is a stereo one; a vocal
+          that is wide only through its reverb gets a stereo room, not double-tracking
+    """
+    m = ref.mean(axis=1)
+    act, r, _ = active_blocks(m, sr)
+    floor = np.percentile(db(r), 5)
+    slopes, gaps = [], []
+    for e in np.flatnonzero(act[:-1] & ~act[1:]):
+        if e + 16 > len(act) or act[e + 1:e + 8].any():
+            continue
+        gaps.extend(range(e + 3, e + 8))
+        seg = db(r[e + 1:e + 16])  # 50-800 ms after the phrase, read only above the noise floor
+        ok = seg > floor + 6
+        if ok.sum() >= 4:
+            slopes.append(np.polyfit(np.flatnonzero(ok) * BLOCK, seg[ok], 1)[0])
+    decay = float(np.median(slopes)) if len(slopes) >= 5 else 0.0
+    # vocal reverbs run ~0.4-2.5 s; slower than -8 dB/s (RT60 > 7.5 s) isn't a decay at all
+    rt60 = float(np.clip(-60 / decay, 0.4, 2.5)) if decay < -8 else None
+    tail_sm = None
+    if ref.shape[1] == 2 and gaps:
+        rs, _ = block_rms((ref[:, 0] - ref[:, 1]) / 2, sr)
+        tail_sm = float(side_mid_db(rs, r, np.array(gaps)))
+    return {"rt60": rt60, "decay_db_per_s": round(decay, 1), "tail_side_mid_db": tail_sm,
+            "stereo": bool(rt60 and tail_sm is not None and tail_sm > -6)}
+
+
+def stereo_room(y, sr, rt60, target_side_mid, sung, seed=11):
+    """Spread a mono vocal's room into stereo: a decorrelated reverb on the side channel only, so the
+    middle (everything the other stages matched) stays exactly as it is."""
+    side = add_room(y, sr, 0.0, rt60, seed) - y  # the wet part alone, from its own impulse response
+    side *= 10 ** ((target_side_mid - side_mid_db(side, y, sung)) / 20)
+    return np.stack([y + side, y - side], axis=1)
 
 
 def noise_floor(m, sr, sung):
@@ -327,13 +374,20 @@ def main():
     else:
         print("Compression: not needed (already as even as the reference)")
 
+    rev = reverb_profile(ref, sr)
     if not np.isnan(target["tail"]) and mt(y)["tail"] < target["tail"] - 1:
-        # drier than the reference: add a room; prefer the shortest, quietest one that gets within 1 dB
-        cands = [(max(abs(mt(add_room(y, sr, w, rt))["tail"] - target["tail"]), 1.0), rt, w)
-                 for rt in (0.4, 0.7, 1.0, 1.4) for w in range(-24, 7, 3)]
-        _, rt60, wet = min(cands)
-        y = add_room(y, sr, wet, rt60)
-        print(f"Room: {rt60} s room at {wet:+d} dB (tail now {mt(y)['tail']:.1f} dB)")
+        if rev["rt60"] is None:
+            print(f"Room: none added (the reference's tail of {target['tail']:.1f} dB doesn't decay "
+                  f"({rev['decay_db_per_s']:+.0f} dB/s): it's bleed or noise, not a reverb)")
+        else:
+            # a room with the reference's own decay time; the quietest that gets within 1 dB of its tail.
+            # Never wetter than -8 dB: matching a long reverb's tail with a short loud room sounded like an echo
+            rt60 = round(rev["rt60"], 1)
+            cands = [(max(abs(mt(add_room(y, sr, w, rt60))["tail"] - target["tail"]), 1.0), w) for w in range(-30, -7)]
+            _, wet = min(cands)
+            y = add_room(y, sr, wet, rt60)
+            print(f"Room: {rt60} s reverb (the reference's decay, {rev['decay_db_per_s']:+.0f} dB/s) at {wet:+d} dB "
+                  f"(tail now {mt(y)['tail']:.1f} dB)")
     elif not np.isnan(target["tail"]):
         act, r, _ = active_blocks(y, sr)
         top = np.percentile(db(r[act]), 95)
@@ -370,6 +424,12 @@ def main():
     show("reference", target)
     show("yours", mt(y))
     print(f"  loudness   reference {lufs(rm, sr):.1f} LUFS, yours {lufs(y, sr):.1f} LUFS (target {target_lufs:.1f})")
+    if rev["stereo"]:
+        width = side_mid_db((ref[:, 0] - ref[:, 1]) / 2, rm, ref_sung)
+        y = limit(stereo_room(y, sr, rev["rt60"], width, sung), sr, ceiling)
+        print(f"Stereo room: the reference's reverb is stereo (tails side/mid {rev['tail_side_mid_db']:+.1f} dB); "
+              f"spread to side/mid {side_mid_db((y[:, 0] - y[:, 1]) / 2, y.mean(axis=1), sung):.1f} dB "
+              f"while singing (reference {width:.1f})")
     out = a.output or a.vocal.with_name(f"{a.vocal.stem}_matched.wav")
     sf.write(str(out), y, sr, subtype="FLOAT")
     print(f"Wrote {out}  (peak {db(np.abs(y).max()):.1f} dBFS)")

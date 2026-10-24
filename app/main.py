@@ -9,11 +9,12 @@ from pathlib import Path
 from PySide6.QtCore import QObject, Qt, QThread, QTimer, QUrl, Signal
 from PySide6.QtGui import QFont, QIcon
 from PySide6.QtMultimedia import QAudioOutput, QMediaPlayer
-from PySide6.QtWidgets import (QApplication, QButtonGroup, QComboBox, QFileDialog, QInputDialog,
-                               QFormLayout, QGroupBox, QHBoxLayout, QLabel, QLineEdit, QListWidget,
+from PySide6.QtWidgets import (QApplication, QButtonGroup, QComboBox, QDialog, QFileDialog, QInputDialog,
+                               QFormLayout, QGridLayout, QGroupBox, QHBoxLayout, QLabel, QLineEdit, QListWidget,
                                QListWidgetItem, QMainWindow, QMessageBox, QPlainTextEdit, QProgressBar,
                                QPushButton, QSplitter, QStackedWidget, QVBoxLayout, QWidget)
 
+from app import assistant
 from app import lyrics
 from app import pipeline
 from app import recorder as rec
@@ -87,6 +88,93 @@ class KaraokeView(QWidget):
             lab.setText(text)
 
 
+class AssistantDialog(QDialog):
+    """Connect the user's own AI assistant: install its official app, sign in, choose it."""
+
+    def __init__(self, parent):
+        super().__init__(parent)
+        self.setWindowTitle("Connect AI assistant")
+        self.setMinimumWidth(620)
+        v = QVBoxLayout(self)
+        intro = QLabel(
+            "Optional. Connect an AI assistant you already use and it will study each new song with the "
+            "Audioworks guide and plan your cover; the app then builds the cover from that plan, checked "
+            "against the same rules. It runs through the assistant's official app on this PC, signed in "
+            "with your own account, and Audioworks only starts it inside its own folder. The assistant "
+            "itself works online. Without one, everything is decided automatically from the measurements.")
+        intro.setWordWrap(True)
+        v.addWidget(intro)
+        grid = QGridLayout()
+        self.rows = {}
+        for r, (key, a) in enumerate(assistant.ASSISTANTS.items()):
+            name = QLabel(f"<b>{a['name']}</b><br><span style='color:#666'>{a['account']}</span>")
+            state = QLabel("")
+            inst = QPushButton("Install")
+            inst.clicked.connect(lambda _=False, k=key: self.install(k))
+            login = QPushButton("Sign in")
+            login.clicked.connect(lambda _=False, k=key: self.sign_in(k))
+            use = QPushButton("Use this one")
+            use.clicked.connect(lambda _=False, k=key: self.use(k))
+            for c, w in enumerate((name, state, inst, login, use)):
+                grid.addWidget(w, r, c)
+            self.rows[key] = (state, inst, login, use)
+        v.addLayout(grid)
+        self.current = QLabel("")
+        v.addWidget(self.current)
+        bar = QHBoxLayout()
+        refresh = QPushButton("Refresh")
+        refresh.clicked.connect(self.refresh)
+        self.off = QPushButton("Disconnect")
+        self.off.clicked.connect(self.disconnect)
+        close = QPushButton("Close")
+        close.clicked.connect(self.accept)
+        bar.addWidget(refresh)
+        bar.addWidget(self.off)
+        bar.addStretch(1)
+        bar.addWidget(close)
+        v.addLayout(bar)
+        self.refresh()
+
+    def refresh(self):
+        QApplication.setOverrideCursor(Qt.WaitCursor)
+        try:
+            on = assistant.connected()
+            for key, (state, inst, login, use) in self.rows.items():
+                st = assistant.status(key)
+                state.setText(("connected" if key == on and st == "ready" else st).capitalize())
+                inst.setVisible(st == "not installed")
+                login.setVisible(st != "not installed")
+                login.setText("Sign in again" if st == "ready" else "Sign in")
+                use.setEnabled(st == "ready" and key != on)
+            self.current.setText(f"Connected: {assistant.ASSISTANTS[on]['name']}" if on else "No assistant connected.")
+            self.off.setEnabled(bool(on))
+        finally:
+            QApplication.restoreOverrideCursor()
+
+    def install(self, key):
+        if not assistant.node_available():
+            QMessageBox.information(self, "Node.js needed",
+                                    "The assistants' apps install with Node.js. Get it from https://nodejs.org "
+                                    "(the LTS version), then click Install again.")
+            return
+        assistant.install(key)
+        QMessageBox.information(self, "Installing", "A window opened to install it. When it finishes, close "
+                                "that window and click Refresh.")
+
+    def sign_in(self, key):
+        assistant.sign_in(key)
+        QMessageBox.information(self, "Sign in", assistant.ASSISTANTS[key]["login_hint"]
+                                + "\n\nThen click Refresh here.")
+
+    def use(self, key):
+        assistant.connect(key)
+        self.refresh()
+
+    def disconnect(self):
+        assistant.disconnect()
+        self.refresh()
+
+
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
@@ -105,6 +193,8 @@ class MainWindow(QMainWindow):
         self.songs.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         self.songs.setSpacing(2)
         self.songs.currentItemChanged.connect(self.select_song)
+        self.ai_btn = QPushButton()
+        self.ai_btn.clicked.connect(self.connect_assistant)
         new_btn = QPushButton("+ New song")
         new_btn.clicked.connect(self.new_song)
         left = QWidget()
@@ -114,6 +204,7 @@ class MainWindow(QMainWindow):
         title.setFont(QFont(title.font().family(), 12, QFont.Bold))
         lv.addWidget(title)
         lv.addWidget(self.songs)
+        lv.addWidget(self.ai_btn)
         lv.addWidget(new_btn)
 
         # right: steps
@@ -151,6 +242,7 @@ class MainWindow(QMainWindow):
         split.addWidget(right)
         split.setSizes([260, 840])
         self.setCentralWidget(split)
+        self.update_ai_button()
         self.refresh_songs()
         self.show_step(0)
 
@@ -190,9 +282,15 @@ class MainWindow(QMainWindow):
         self.song_info.setTextInteractionFlags(Qt.TextSelectableByMouse)
         self.reprep_btn = QPushButton("Prepare again")
         self.reprep_btn.clicked.connect(self.prepare_again)
+        self.ai_plan_btn = QPushButton()
+        self.ai_plan_btn.clicked.connect(self.ask_assistant)
         self.song_info.setAlignment(Qt.AlignTop | Qt.AlignLeft)
         iv.addWidget(self.song_info, 1)
-        iv.addWidget(self.reprep_btn, 0, Qt.AlignLeft)
+        row = QHBoxLayout()
+        row.addWidget(self.reprep_btn)
+        row.addWidget(self.ai_plan_btn)
+        row.addStretch(1)
+        iv.addLayout(row)
         v.addWidget(info, 1)
         self.source_changed(0)
         return page
@@ -412,6 +510,7 @@ class MainWindow(QMainWindow):
         self.songs.clearSelection()
         self.folder = None
         self.song_info.setText("Get a new song above.")
+        self.update_ai_button()
         self.show_step(0)
 
     def source_changed(self, i):
@@ -452,6 +551,23 @@ class MainWindow(QMainWindow):
             folder = self.folder
             self.run(lambda log: pipeline.prepare(folder, log), lambda _: self.refresh_songs(folder), "Preparing")
 
+    def connect_assistant(self):
+        AssistantDialog(self).exec()
+        self.update_ai_button()
+
+    def update_ai_button(self):
+        key = assistant.connected()
+        name = assistant.ASSISTANTS[key]["name"] if key else None
+        self.ai_btn.setText(f"AI assistant: {name}" if name else "Connect AI assistant")
+        self.ai_plan_btn.setText(f"Ask {name} to plan this song" if name else "")
+        self.ai_plan_btn.setVisible(bool(name and self.folder))
+
+    def ask_assistant(self):
+        if self.folder:
+            folder = self.folder
+            self.run(lambda log: assistant.study(folder, log), lambda _: self.refresh_songs(folder),
+                     "Planning with your AI assistant")
+
     def select_song(self, item, _prev=None):
         if item:
             self.load_song(Path(item.data(Qt.UserRole)))
@@ -461,6 +577,7 @@ class MainWindow(QMainWindow):
         notes = self.notes()
         self.song_info.setText(pipeline.summary(notes) + f"\n\nFolder: {folder}")
         self.reprep_btn.setVisible(True)
+        self.update_ai_button()
         self.take_list.clear()
         for t in pipeline.takes(folder):
             self.take_list.addItem(t)

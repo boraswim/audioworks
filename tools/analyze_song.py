@@ -166,9 +166,18 @@ def main():
         side_mid = 10 * np.log10(np.sum(((vs[:, 0] - vs[:, 1]) / 2)[sung] ** 2) / np.sum(((vs[:, 0] + vs[:, 1]) / 2)[sung] ** 2) + 1e-12)
     else:
         side_mid = -120.0
-    wide = side_mid > -20
-    print(f"stereo width (side/mid while singing) {side_mid:.1f} dB -> {'WIDE vocal' if wide else 'mono / centered'}; "
-          f"vocal-stem noise floor {floor_db:.1f} dBFS; vocal vs instrumental {balance:+.1f} LU")
+    rev = match.reverb_profile(vs, sr)
+    # a vocal can read wide only because its reverb is stereo: then the side channel is far stronger in the
+    # tails than while singing, and the cover gets a stereo room instead of double-tracking
+    reverb_width = rev["stereo"] and rev["tail_side_mid_db"] - side_mid > 8
+    wide = side_mid > -20 and not reverb_width
+    print("reverb: " + (f"{rev['rt60']:.1f} s decay ({rev['decay_db_per_s']:+.0f} dB/s)"
+                        + (", stereo" if rev["stereo"] else "") if rev["rt60"] else
+                        f"none (the gaps hold steady bleed/noise, {rev['decay_db_per_s']:+.0f} dB/s)"))
+    print(f"stereo width (side/mid while singing) {side_mid:.1f} dB -> "
+          + ("WIDE vocal" if wide else "wide only through its stereo reverb" if reverb_width and side_mid > -20
+             else "mono / centered")
+          + f"; vocal-stem noise floor {floor_db:.1f} dBFS; vocal vs instrumental {balance:+.1f} LU")
     import deess
     import scipy.signal as ss
     fq, _, spec = ss.stft(vm, sr, nperseg=deess.NPERSEG, noverlap=deess.NPERSEG - deess.HOP)
@@ -208,7 +217,7 @@ def main():
     if wide:
         print("double.py <processed> --tightness tight --with-lead --match-width song_vocals.wav   (after match.py)")
     if tuned:
-        print("optional: vocoder.py on the tuned take for a robotic version, if the record is known to be vocoded")
+        print("vocoder: song_features.py decides (what is written about the song + a carrier check on the stem)")
     print(f"mixdown.py: target vocal balance {balance + 2:+.1f} LU (original {balance:+.1f} + 2, user preference)"
           + (", --mono" if mono_song else "") + f", loudness {song_lufs:.1f} LUFS")
     low_med = np.median(mi)
@@ -230,7 +239,8 @@ def main():
             "pitch_style": style, "off_grid_cents": r1(np.median(dev)),
             "within_10_cents_pct": r1(100 * np.mean(dev < 10)), "wobble_cents": r1(np.median(wob)),
             "tone_vs_1k_db": {f"{lo}-{hi}": r1(v) for (lo, hi), v in rel.items()},
-            "evenness_db": r1(mt["spread"]), "room_tail_db": r1(mt["tail"]), "peak_to_average_db": r1(mt["crest"]),
+            "evenness_db": r1(mt["spread"]), "room_tail_db": r1(mt["tail"]),
+            "reverb_s": rev["rt60"] and r1(rev["rt60"]), "reverb_stereo": rev["stereo"], "peak_to_average_db": r1(mt["crest"]),
             "stereo_side_mid_db": r1(side_mid), "wide": bool(wide), "noise_floor_dbfs": r1(floor_db),
             "vocal_vs_instrumental_lu": r1(balance), "sibilant_pct": r1(sib),
             "kurtosis": round(kurt, 2), "grit_flatness": round(flat, 3), "distorted": bool(distorted),
