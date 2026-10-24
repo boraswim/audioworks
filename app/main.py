@@ -9,7 +9,7 @@ from pathlib import Path
 from PySide6.QtCore import QObject, Qt, QThread, QTimer, QUrl, Signal
 from PySide6.QtGui import QFont, QIcon
 from PySide6.QtMultimedia import QAudioOutput, QMediaPlayer
-from PySide6.QtWidgets import (QApplication, QButtonGroup, QCheckBox, QComboBox, QFileDialog, QInputDialog,
+from PySide6.QtWidgets import (QApplication, QButtonGroup, QComboBox, QFileDialog, QInputDialog,
                                QFormLayout, QGroupBox, QHBoxLayout, QLabel, QLineEdit, QListWidget,
                                QListWidgetItem, QMainWindow, QMessageBox, QPlainTextEdit, QProgressBar,
                                QPushButton, QSplitter, QStackedWidget, QVBoxLayout, QWidget)
@@ -297,22 +297,14 @@ class MainWindow(QMainWindow):
         box = QGroupBox("Make your cover")
         f = QFormLayout(box)
         self.take_label = QLabel("")
-        auto = QLabel("Pitch correction, timing and your vocal level are set automatically to fit the "
-                      "original as closely as possible.")
+        auto = QLabel("Everything is matched to the original automatically: pitch correction, timing, your "
+                      "vocal level and the vocal's sound and effects.")
         auto.setWordWrap(True)
-        self.hiss = QCheckBox("Tape hiss (old / lo-fi recordings)")
-        self.distortion = QCheckBox("Amp distortion on the vocal")
-        self.widen = QCheckBox("Stereo-wide vocal")
-        self.vocoder = QCheckBox("Robotic vocoder sound")
         self.make_btn = QPushButton("Make my cover")
         self.make_btn.setMinimumHeight(36)
         self.make_btn.clicked.connect(self.make_cover)
         f.addRow("Take", self.take_label)
         f.addRow("", auto)
-        f.addRow("Sound", self.distortion)
-        f.addRow("", self.hiss)
-        f.addRow("", self.widen)
-        f.addRow("", self.vocoder)
         f.addRow("", self.make_btn)
         v.addWidget(box)
 
@@ -612,26 +604,8 @@ class MainWindow(QMainWindow):
         return item.text() if item else None
 
     def prepare_step3(self):
-        notes = self.notes()
-        recd = notes.get("recommended", {})
         take = self.current_take()
         self.take_label.setText(take or "no take yet: record or upload one in step 2")
-        saved = notes.get("takes", {}).get(take or "", {}).get("settings")
-        self.distortion.setToolTip("Drives your vocal like an amp, with the amount measured to match the original. "
-                                   "On by default when the original vocal measures as distorted.")
-        if saved:  # show what the last cover of this take used
-            self.distortion.setChecked(bool(saved.get("distortion", recd.get("distortion"))))
-            self.hiss.setChecked(bool(saved["hiss"]))
-            self.widen.setChecked(bool(saved["widen"]))
-            self.vocoder.setChecked(bool(saved["vocoder"]))
-        else:
-            self.distortion.setChecked(bool(recd.get("distortion")))
-            self.hiss.setChecked("--hiss" in recd.get("match_flags", []))
-            self.widen.setChecked(bool(recd.get("widen")))
-            self.vocoder.setChecked(notes.get("final", {}).get("version") == "vocoder")
-        self.vocoder.setToolTip("Re-synthesizes your voice on a synth tone, like a vocoder. Best on records "
-                                "known for that sound." + (" This song's vocal is tuned, so it may suit it."
-                                                           if recd.get("vocoder_optional") else ""))
         self.update_result()
 
     def make_cover(self):
@@ -639,8 +613,7 @@ class MainWindow(QMainWindow):
         if not take:
             QMessageBox.information(self, "No take", "Record or upload a take in step 2 first.")
             return
-        opts = {"hiss": self.hiss.isChecked(), "widen": self.widen.isChecked(), "vocoder": self.vocoder.isChecked(),
-                "distortion": self.distortion.isChecked()}
+        opts = {}  # the engine decides every setting from the song's analysis
         folder = self.folder
         self.player.stop()
         self.player.setSource(QUrl())  # release the file so it can be overwritten

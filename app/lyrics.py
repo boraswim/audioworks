@@ -160,6 +160,11 @@ def get(folder, artist, title, duration, album=None, log=print):
     """Find, time-check and save lyrics for a prepared song. Returns a notes dict (or None)."""
     folder = Path(folder)
     synced, plain = fetch_lrclib(artist, title, duration, album)
+    if not (synced or plain) and artist:
+        # video titles are sometimes "Song - Artist"; try the other order before giving up
+        synced, plain = fetch_lrclib(title, artist, duration, album)
+        if synced or plain:
+            log("Lyrics: found with artist and title swapped")
     if synced:
         lines = parse_lrc(synced)
         shift, share, sure = confident_shift(lines, folder)

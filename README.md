@@ -18,10 +18,10 @@ runs locally. Everything else is classic signal processing.
 2. **Vocals**: record in the app. The song plays in your headphones while your mic records, with a
    one-second count-in, and the lyrics scroll karaoke-style. Or upload a recording you made yourself
    (start recording before you start the song).
-3. **Result**: click "Make my cover". Pitch correction, timing and your vocal level are set
-   automatically to fit the original. Optional sound effects (amp distortion, tape hiss, stereo-wide
-   vocal, vocoder) default to whatever the original has. Listen, download the WAV and MP3, and click
-   "Sounds good" to tidy the song's folder.
+3. **Result**: click "Make my cover". There's nothing to set: pitch correction, timing, your vocal
+   level and the vocal's effects (amp distortion, tape hiss, stereo width) are all matched to the
+   original automatically. Listen, download the WAV and MP3, and click "Sounds good" to tidy the
+   song's folder.
 
 ## Setup
 

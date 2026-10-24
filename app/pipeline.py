@@ -69,6 +69,11 @@ def convert(src, dst, args=()):
 # ---------------------------------------------------------------- songs
 
 def slug(text):
+    import unicodedata
+
+    # keep letters readable instead of dropping them: "Yıldızlar" -> "yildizlar", "Ölü" -> "olu"
+    text = text.replace("ı", "i").replace("İ", "I")
+    text = unicodedata.normalize("NFKD", text).encode("ascii", "ignore").decode()
     s = re.sub(r"\(.*?\)|\[.*?\]", "", text.lower())  # drop "(official video)" etc.
     s = re.sub(r"[^a-z0-9]+", "-", s).strip("-")
     return s[:60] or "song"
@@ -113,6 +118,7 @@ def clean_title(title, artist=""):
     """'The Strokes - Reptilia (Official HD Video)' -> ('The Strokes', 'Reptilia')."""
     t = re.sub(r"\s*[(\[][^)\]]*(official|video|audio|lyric|visuali[sz]er|hd|4k|remaster|explicit|clip)[^)\]]*[)\]]",
                "", title, flags=re.I).strip()
+    t = re.sub(r"\s*[(\[][^)\]]*\b(19|20)\d\d\b[^)\]]*[)\]]", "", t).strip()  # "(Album, 2006)" notes
     if " - " in t:
         a, t = t.split(" - ", 1)
         artist = artist or a
@@ -133,8 +139,12 @@ def download(url, log=print):
     if info.get("track"):
         artist, title = info.get("artist") or "", info["track"]
     else:
+        uploader = re.sub(r"\s*(- Topic|VEVO)$", "", info.get("uploader") or "").strip()
         artist, title = clean_title(info.get("title") or "song", info.get("artist") or "")
-        artist = artist or re.sub(r"\s*(- Topic|VEVO)$", "", info.get("uploader") or "")
+        # "Song - Artist" titles: when the channel's name is on the title side, swap the two
+        if uploader and artist and uploader.lower() in title.lower() and uploader.lower() not in artist.lower():
+            artist, title = title, artist
+        artist = artist or uploader
     folder = new_song_folder(f"{artist} {title}".strip())
     log(f"Downloading '{title}' from {platform} -> {folder.name}")
 
@@ -248,7 +258,8 @@ def takes(folder):
 # ---------------------------------------------------------------- processing
 
 # above: the user found +1 dB over the original singer's balance still a bit low
-DEFAULTS = {"tuning": "original", "above": 2.0, "hiss": None, "widen": None, "vocoder": False, "distortion": None}
+# None = decided from the song's analysis; the app exposes no settings (the user wants everything matched)
+DEFAULTS = {"tuning": "original", "above": 2.0, "hiss": None, "widen": None, "vocoder": None, "distortion": None}
 DRIVES = (0, 4, 8, 12, 16)  # dB tried when copying an amp-driven original vocal
 
 
@@ -295,6 +306,10 @@ def process(folder, take, options=None, log=print):
         opts["widen"] = bool(rec.get("widen"))
     if opts["distortion"] is None:
         opts["distortion"] = bool(rec.get("distortion"))
+    if opts["vocoder"] is None:
+        # a vocoder can't be detected by measurement, so it's only used where the user chose the vocoder
+        # version of this song before (recorded in its notes)
+        opts["vocoder"] = notes.get("final", {}).get("version") == "vocoder"
     tk = notes.setdefault("takes", {}).setdefault(take, {})
     cache = tk.setdefault("app_cache", {})
     f = lambda suffix: folder / f"{take}_{suffix}.wav"  # noqa: E731
