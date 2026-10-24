@@ -64,7 +64,9 @@ guide (`app/assistant_skill.md`), adding what it knows about the record, and wri
 correction, de-essing, tone, hiss, distortion, double-tracking, vocoder and your vocal level. The app
 checks the plan against the same rules (for example, pitch correction never moves a note more than
 1.5 semitones) and builds the cover from it. "Ask ... to plan this song" re-plans an existing song.
-The assistant may only write its plan file; the AI itself runs on its company's servers. Without an
+The assistant may only write its plan file; the AI itself runs on its company's servers.
+To go easy on your plan's limits, Audioworks asks for each assistant's lighter model (Gemini Flash,
+GPT-6 Luna, Claude Sonnet) and falls back to its default model if that one isn't available. Without an
 assistant, everything is decided automatically from the measurements.
 
 ## Where things are kept

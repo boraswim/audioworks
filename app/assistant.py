@@ -121,16 +121,35 @@ def sign_in(key):
 
 # ---------------------------------------------------------------- planning a song
 
-def command(key, prompt):
+# A lighter model for each assistant: planning is reading two files and applying the guide's rules, and
+# a light model does it as well (Sonnet gave Opus's plan on Yıldızlar) while using much less of the user's
+# plan. Model names change, so a run that fails on the light model is retried once on the default.
+LIGHT_MODEL = {"gemini": "flash", "codex": "gpt-6-luna", "claude": "sonnet"}
+
+
+def command(key, prompt, light=True):
     cli = find_cli(key)
+    model = ["--model", LIGHT_MODEL[key]] if light else []
     if key == "gemini":
         # edits are approved automatically; shell commands aren't, so it can read and write files only
-        return [cli, "--approval-mode", "auto_edit", "--output-format", "text", "-p", prompt]
+        return [cli, *model, "--approval-mode", "auto_edit", "--output-format", "text", "-p", prompt]
     if key == "codex":
         # Codex's sandbox: writes only inside the project, no network for the commands it runs
-        return [cli, "exec", "--sandbox", "workspace-write", "--skip-git-repo-check", prompt]
-    return [cli, "-p", prompt, "--permission-mode", "acceptEdits",
+        return [cli, "exec", *model, "--sandbox", "workspace-write", "--skip-git-repo-check", prompt]
+    return [cli, "-p", prompt, *model, "--permission-mode", "acceptEdits",
             "--allowedTools", "Read", "Glob", "Grep", "Write", "Edit", "Bash(.venv/Scripts/python.exe tools/*)"]
+
+
+def run(key, prompt, log, light):
+    """Run the assistant once, streaming its output; returns its exit code."""
+    name = ASSISTANTS[key]["name"]
+    proc = subprocess.Popen(command(key, prompt, light), cwd=ROOT, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                            stdin=subprocess.DEVNULL, text=True, encoding="utf-8", errors="replace",
+                            creationflags=NO_WINDOW)
+    for line in proc.stdout:
+        if line.strip():
+            log(f"  {name}: {line.rstrip()}")
+    return proc.wait(timeout=900)
 
 
 def study(folder, log=print, key=None):
@@ -152,18 +171,15 @@ def study(folder, log=print, key=None):
               f"The measurements are in {rel}/audioworks.json. Write your plan to {rel}/{PLAN} and change no other file.")
     log(f"Asking {a['name']} to plan the cover (this can take a few minutes)...")
     try:
-        proc = subprocess.Popen(command(key, prompt), cwd=ROOT, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-                                stdin=subprocess.DEVNULL, text=True, encoding="utf-8", errors="replace",
-                                creationflags=NO_WINDOW)
-        for line in proc.stdout:
-            if line.strip():
-                log(f"  {a['name']}: {line.rstrip()}")
-        proc.wait(timeout=900)
+        code = run(key, prompt, log, light=True)
+        if code != 0 and not plan_file.exists():
+            log(f"{a['name']} couldn't use its lighter model ({LIGHT_MODEL[key]}); trying its default model")
+            code = run(key, prompt, log, light=False)
     except Exception as e:  # noqa: BLE001 - the cover can always be planned from the measurements
         log(f"{a['name']} didn't finish ({e!r}); planning from the measurements")
         return None
     if not plan_file.exists():
-        log(f"{a['name']} wrote no plan (exit code {proc.returncode}); planning from the measurements. "
+        log(f"{a['name']} wrote no plan (exit code {code}); planning from the measurements. "
             "If it asked you to sign in, use Connect AI assistant -> Sign in.")
         return None
     try:
