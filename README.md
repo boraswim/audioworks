@@ -109,3 +109,16 @@ alongside; "Sounds good" moves them to the Recycle Bin. The app writes a log to 
 | `tools/music.py`, `tools/songfile.py` | Shared helpers: pitch tracking, keys, PSOLA; the song notes file |
 
 Each tool also runs on its own from the command line (`.venv\Scripts\python.exe tools\<name>.py --help`).
+
+## License
+
+Audioworks is free software under the [GNU General Public License v3.0](LICENSE) (GPL-3.0): you may
+use, study, change and share it, and anything you share that's built on it must be released under the
+same license, with its source. Copyright (C) 2026 Bora Sevim.
+
+It's GPL because it builds on [Parselmouth](https://github.com/YannickJadoul/Parselmouth) (Praat), which
+is GPL-3.0. The other libraries it installs keep their own licenses (MIT, BSD, ISC, Apache, LGPL,
+Unlicense), all compatible with this one.
+
+The license covers the app's code only. The songs you download or import stay subject to their
+rights holders' terms, and so does their use in the covers you make.
