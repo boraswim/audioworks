@@ -1,0 +1,20 @@
+# Python environment and caches
+.venv/
+__pycache__/
+*.pyc
+
+# Your songs, recordings and covers (personal data, and the songs are copyrighted)
+songs/
+
+# Runtime output
+audioworks.log
+
+# Machine-specific shortcut (absolute paths); recreate it locally, see README
+Audioworks.lnk
+
+# Chat workflow with Claude (not part of the app)
+.claude/
+.mcp.json
+tools/check_exports.py
+tools/compare.py
+tools/harmony.py

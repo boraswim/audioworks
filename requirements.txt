@@ -1,0 +1,16 @@
+numpy
+scipy
+librosa
+soundfile
+praat-parselmouth
+torch==2.7.1
+torchaudio==2.7.1
+demucs
+pyloudnorm
+# desktop app
+PySide6
+yt-dlp
+imageio-ffmpeg
+sounddevice
+send2trash
+lameenc
