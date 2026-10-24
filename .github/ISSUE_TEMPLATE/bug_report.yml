@@ -12,7 +12,7 @@ body:
     attributes:
       label: What happened
       description: What you did, step by step, and what went wrong.
-      placeholder: "1. Pasted a YouTube link in step 1\n2. Clicked Get song and prepare\n3. The app closed while splitting"
+      placeholder: "1. Pasted a YouTube link in step 1\n2. Clicked Get song, then Prepare\n3. The app closed while splitting"
     validations:
       required: true
   - type: textarea
@@ -46,7 +46,7 @@ body:
     id: version
     attributes:
       label: Audioworks version
-      placeholder: "1.0.0"
+      placeholder: "1.0.2"
     validations:
       required: true
   - type: input

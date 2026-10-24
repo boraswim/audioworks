@@ -13,13 +13,15 @@ covers (see below).
 
 ## Using it
 
-1. **Song**: choose a local audio file (any common format), or paste a YouTube or SoundCloud link.
-   Only download songs you have the rights to use; downloading may be against the platform's terms.
-   The app splits the song into vocal and instrumental, analyzes how the original vocal was produced,
-   checks the song for effects that measuring alone can't settle (a vocoder or talk box, from the
-   song's Wikipedia article and the vocal itself), and looks up synced lyrics.
-2. **Vocals**: record in the app. The song plays in your headphones while your mic records, with a
-   one-second count-in, and the lyrics scroll karaoke-style. Or upload a recording you made yourself
+1. **Song**: choose a local audio file (any common format), or paste a YouTube or SoundCloud link,
+   and click "Get song". Only download songs you have the rights to use; downloading may be against
+   the platform's terms. Then click **Prepare** under "About this song": the app splits the song into
+   vocal and instrumental, analyzes how the original vocal was produced, checks the song for effects
+   that measuring alone can't settle (a vocoder or talk box, from the song's Wikipedia article and the
+   vocal itself), and looks up synced lyrics. With an AI assistant connected, **Prepare with ...** also
+   has it plan the cover. Both buttons become "Prepare again" afterwards.
+2. **Vocals**: record in the app. The song plays in your headphones at half volume (so you can hear
+   yourself) while your mic records, with a one-second count-in, and the lyrics scroll karaoke-style. Or upload a recording you made yourself
    (start recording before you start the song).
 3. **Result**: click "Make my cover". There's nothing to set: pitch correction, timing, your vocal
    level and the vocal's effects (amp distortion, tape hiss, stereo width, vocoder) are all matched
@@ -59,11 +61,12 @@ account). The dialog installs the assistant's official command-line app (needs
 [Node.js](https://nodejs.org)) and opens its sign-in; your account stays with that app on your PC, and
 Audioworks has no server and stores no keys.
 
-Once connected, preparing a song ends with the assistant reading the measurements and the Audioworks
+Once connected, **Prepare with ...** in step 1 ends with the assistant reading the measurements and the Audioworks
 guide (`app/assistant_skill.md`), adding what it knows about the record, and writing a plan: pitch
 correction, de-essing, tone, hiss, distortion, double-tracking, vocoder and your vocal level. The app
 checks the plan against the same rules (for example, pitch correction never moves a note more than
-1.5 semitones) and builds the cover from it. "Ask ... to plan this song" re-plans an existing song.
+1.5 semitones) and builds the cover from it. Plain **Prepare** leaves the assistant out, and "Prepare
+again with ..." re-plans a song.
 The assistant may only write its plan file; the AI itself runs on its company's servers.
 To go easy on your plan's limits, Audioworks asks for each assistant's lighter model (Gemini Flash,
 GPT-6 Luna, Claude Sonnet) and falls back to its default model if that one isn't available. Without an

@@ -165,8 +165,9 @@ def download(url, log=print):
     return folder
 
 
-def prepare(folder, log=print):
-    """Separate and analyze: everything needed before the user records."""
+def prepare(folder, log=print, with_assistant=False):
+    """Separate and analyze: everything needed before the user records. with_assistant: the connected AI
+    assistant then plans the cover from the measurements (app/assistant.py)."""
     folder = Path(folder)
     if not ((folder / "song_vocals.wav").exists() and (folder / "song_instrumental.wav").exists()):
         log("Separating vocals and instrumental (this takes a little while)...")
@@ -188,7 +189,7 @@ def prepare(folder, log=print):
     songfile.save(folder, notes)
     from app import assistant
 
-    if assistant.connected():
+    if with_assistant and assistant.connected():
         assistant.study(folder, log)
         notes = songfile.load(folder)
     return notes
@@ -220,7 +221,7 @@ def summary(notes):
     """Short human-readable description of a prepared song."""
     s, an, rec = notes.get("song", {}), notes.get("analysis", {}), notes.get("recommended", {})
     if not an:
-        return "Not prepared yet."
+        return "Not prepared yet: click Prepare below."
     src = notes.get("source", {})
     lines = [
         f"{s.get('artist') or src.get('artist', '')} - {s.get('title') or src.get('title', '')}".strip(" -"),

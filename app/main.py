@@ -19,6 +19,8 @@ from app import lyrics
 from app import pipeline
 from app import recorder as rec
 
+# step 2 plays the song at half volume (recording and the lyrics preview), so the singer hears themself
+SONG_VOLUME_WHILE_SINGING = 0.5
 STATUS_TEXT = {"imported": "not prepared", "analyzed": "ready for vocals", "in progress": "in progress",
                "awaiting feedback": "cover ready", "approved": "approved", "on hold": "on hold"}
 
@@ -265,7 +267,7 @@ class MainWindow(QMainWindow):
                              "platform's terms of service.")
         self.notice.setWordWrap(True)
         self.notice.setStyleSheet("color: #a06000;")
-        self.get_btn = QPushButton("Get song and prepare")
+        self.get_btn = QPushButton("Get song")
         self.get_btn.setMinimumHeight(32)
         self.get_btn.clicked.connect(self.get_song)
         f.addRow("Source", self.source)
@@ -280,15 +282,16 @@ class MainWindow(QMainWindow):
         self.song_info = QLabel("Pick a song on the left, or get a new one above.")
         self.song_info.setWordWrap(True)
         self.song_info.setTextInteractionFlags(Qt.TextSelectableByMouse)
-        self.reprep_btn = QPushButton("Prepare again")
-        self.reprep_btn.clicked.connect(self.prepare_again)
-        self.ai_plan_btn = QPushButton()
-        self.ai_plan_btn.clicked.connect(self.ask_assistant)
+        # Prepare: split, measure, find lyrics. "with <assistant>" also has the connected AI plan the cover.
+        self.prep_btn = QPushButton("Prepare")
+        self.prep_btn.clicked.connect(self.prepare_song)
+        self.prep_ai_btn = QPushButton()
+        self.prep_ai_btn.clicked.connect(self.prepare_song_with_assistant)
         self.song_info.setAlignment(Qt.AlignTop | Qt.AlignLeft)
         iv.addWidget(self.song_info, 1)
         row = QHBoxLayout()
-        row.addWidget(self.reprep_btn)
-        row.addWidget(self.ai_plan_btn)
+        row.addWidget(self.prep_btn)
+        row.addWidget(self.prep_ai_btn)
         row.addStretch(1)
         iv.addLayout(row)
         v.addWidget(info, 1)
@@ -499,6 +502,10 @@ class MainWindow(QMainWindow):
         if i > 0 and not self.folder:
             QMessageBox.information(self, "Pick a song", "Choose or get a song first.")
             i = 0
+        elif i > 0 and not self.prepared():
+            QMessageBox.information(self, "Prepare the song", "Prepare the song first, with the buttons under "
+                                    "\"About this song\".")
+            i = 0
         if i == 2:
             self.prepare_step3()
         self.pages.setCurrentIndex(i)
@@ -539,17 +546,24 @@ class MainWindow(QMainWindow):
                 return
             fetch = lambda log: pipeline.download(url, log)  # noqa: E731
 
-        def job(log):
-            folder = fetch(log)
-            pipeline.prepare(folder, log)
-            return folder
+        self.run(fetch, self.song_received, "Getting the song")
 
-        self.run(job, lambda folder: (self.refresh_songs(folder), self.show_step(1)), "Getting the song")
+    def song_received(self, folder):
+        self.refresh_songs(folder)
+        self.log("Song added. Prepare it with the buttons under \"About this song\".")
 
-    def prepare_again(self):
+    def prepared(self):
+        return bool(self.notes().get("analysis"))
+
+    def prepare_song(self, with_assistant=False):
         if self.folder:
             folder = self.folder
-            self.run(lambda log: pipeline.prepare(folder, log), lambda _: self.refresh_songs(folder), "Preparing")
+            self.run(lambda log: pipeline.prepare(folder, log, with_assistant=with_assistant),
+                     lambda _: self.refresh_songs(folder),
+                     "Preparing with your AI assistant" if with_assistant else "Preparing")
+
+    def prepare_song_with_assistant(self):
+        self.prepare_song(with_assistant=True)
 
     def connect_assistant(self):
         AssistantDialog(self).exec()
@@ -559,14 +573,11 @@ class MainWindow(QMainWindow):
         key = assistant.connected()
         name = assistant.ASSISTANTS[key]["name"] if key else None
         self.ai_btn.setText(f"AI assistant: {name}" if name else "Connect AI assistant")
-        self.ai_plan_btn.setText(f"Ask {name} to plan this song" if name else "")
-        self.ai_plan_btn.setVisible(bool(name and self.folder))
-
-    def ask_assistant(self):
-        if self.folder:
-            folder = self.folder
-            self.run(lambda log: assistant.study(folder, log), lambda _: self.refresh_songs(folder),
-                     "Planning with your AI assistant")
+        again = " again" if self.folder and self.prepared() else ""
+        self.prep_btn.setText(f"Prepare{again}")
+        self.prep_btn.setVisible(bool(self.folder))
+        self.prep_ai_btn.setText(f"Prepare{again} with {name}" if name else "")
+        self.prep_ai_btn.setVisible(bool(name and self.folder))
 
     def select_song(self, item, _prev=None):
         if item:
@@ -576,7 +587,6 @@ class MainWindow(QMainWindow):
         self.folder = folder
         notes = self.notes()
         self.song_info.setText(pipeline.summary(notes) + f"\n\nFolder: {folder}")
-        self.reprep_btn.setVisible(True)
         self.update_ai_button()
         self.take_list.clear()
         for t in pipeline.takes(folder):
@@ -653,6 +663,7 @@ class MainWindow(QMainWindow):
             self.karaoke.set_lines(self.karaoke.lines)
         elif self.folder:
             self.player.setSource(QUrl.fromLocalFile(str(self.folder / "song.mp3")))
+            self.audio.setVolume(SONG_VOLUME_WHILE_SINGING)
             self.player.play()
             self.preview_timer.start(50)
             self.preview_btn.setText("Stop preview")
@@ -669,7 +680,8 @@ class MainWindow(QMainWindow):
             self.player.stop()
             take = pipeline.next_take(self.folder)
             self.recorder = rec.Recorder(self.folder / "song.mp3", self.folder / f"{take}.wav",
-                                         self.mic.currentData(), self.out.currentData())
+                                         self.mic.currentData(), self.out.currentData(),
+                                         song_volume=SONG_VOLUME_WHILE_SINGING)
             self.recorder.start()
             self.rec_btn.setText("Stop")
             self.timer = QTimer(self)
@@ -781,6 +793,7 @@ class MainWindow(QMainWindow):
         wav, _ = self.cover_files()
         path = wav if which == "cover" else self.folder / "my_vocal_processed.wav"
         self.player.setSource(QUrl.fromLocalFile(str(path)))
+        self.audio.setVolume(1.0)
         self.player.play()
 
     def download_cover(self):
@@ -837,16 +850,74 @@ def setup_logging():
 ICON = Path(__file__).resolve().parent / "assets" / "audioworks.ico"
 
 
+APP_ID = "Audioworks.DesktopApp"
+
+
+def set_taskbar_identity(hwnd):
+    """Give the window its own taskbar identity with the Audioworks icon, name and relaunch command.
+
+    The process-wide app ID alone isn't enough: Windows then looks for a Start menu shortcut carrying
+    that ID, finds none, and shows a blank icon. These window properties tell it directly (they're also
+    what a pinned taskbar button uses)."""
+    import ctypes
+    import uuid
+    from ctypes import wintypes as wt
+
+    class GUID(ctypes.Structure):
+        _fields_ = [("a", ctypes.c_ulong), ("b", ctypes.c_ushort), ("c", ctypes.c_ushort), ("d", ctypes.c_ubyte * 8)]
+
+    class PROPERTYKEY(ctypes.Structure):
+        _fields_ = [("fmtid", GUID), ("pid", ctypes.c_ulong)]
+
+    class PROPVARIANT(ctypes.Structure):
+        _fields_ = [("vt", ctypes.c_ushort), ("r1", ctypes.c_ushort), ("r2", ctypes.c_ushort),
+                    ("r3", ctypes.c_ushort), ("value", ctypes.c_void_p), ("pad", ctypes.c_void_p)]
+
+    def guid(text):
+        u, g = uuid.UUID(text), GUID()
+        g.a, g.b, g.c = u.fields[0], u.fields[1], u.fields[2]
+        g.d[:] = list(u.bytes[8:])
+        return g
+
+    store = ctypes.c_void_p()
+    iid = guid("886d8eeb-8cf2-4446-8d02-cdba1dbdcf99")  # IPropertyStore
+    if ctypes.windll.shell32.SHGetPropertyStoreForWindow(wt.HWND(hwnd), ctypes.byref(iid), ctypes.byref(store)):
+        return
+    vtbl = ctypes.cast(ctypes.cast(store, ctypes.POINTER(ctypes.c_void_p))[0], ctypes.POINTER(ctypes.c_void_p))
+    set_value = ctypes.WINFUNCTYPE(ctypes.c_long, ctypes.c_void_p, ctypes.POINTER(PROPERTYKEY),
+                                   ctypes.POINTER(PROPVARIANT))(vtbl[6])
+    commit = ctypes.WINFUNCTYPE(ctypes.c_long, ctypes.c_void_p)(vtbl[7])
+    release = ctypes.WINFUNCTYPE(ctypes.c_ulong, ctypes.c_void_p)(vtbl[2])
+    root = ICON.parent.parent.parent
+    pythonw = Path(sys.executable).with_name("pythonw.exe")
+    relaunch = (f'"{pythonw}" -c "import os,sys;os.chdir(r\'{root}\');sys.path.insert(0,r\'{root}\');'
+                f'from app.main import main;main()"')
+    # System.AppUserModel.*: RelaunchCommand 2, RelaunchIconResource 3, RelaunchDisplayNameResource 4, ID 5;
+    # the ID goes last, once the rest is in place
+    for pid, text in ((2, relaunch), (3, f"{ICON},0"), (4, "Audioworks"), (5, APP_ID)):
+        buf = ctypes.create_unicode_buffer(text)
+        pv = PROPVARIANT(vt=31, value=ctypes.cast(buf, ctypes.c_void_p))  # VT_LPWSTR; SetValue copies it
+        set_value(store, ctypes.byref(PROPERTYKEY(guid("9F4C2855-9F79-4B39-A8D0-E1D42DE1D5F3"), pid)),
+                  ctypes.byref(pv))
+    commit(store)
+    release(store)
+
+
 def main():
     log = setup_logging()
     if sys.platform == "win32":
-        # its own taskbar identity, so Windows shows the Audioworks icon instead of grouping it under Python
+        # its own taskbar identity, so Windows doesn't group it under Python (see set_taskbar_identity)
         import ctypes
-        ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID("Audioworks.DesktopApp")
+        ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(APP_ID)
     app = QApplication(sys.argv)
     app.setWindowIcon(QIcon(str(ICON)))
     app.setApplicationName("Audioworks")
     w = MainWindow()
+    if sys.platform == "win32":
+        try:
+            set_taskbar_identity(int(w.winId()))  # winId creates the native window before it's shown
+        except Exception:  # noqa: BLE001 - only the taskbar icon depends on it
+            traceback.print_exc(file=log)
     w.show()
     sys.exit(app.exec())
 

@@ -37,7 +37,7 @@ def devices():
 
 
 class Recorder:
-    def __init__(self, song_path, out_path, input_device=None, output_device=None, preroll=1.0, song_volume=0.8):
+    def __init__(self, song_path, out_path, input_device=None, output_device=None, preroll=1.0, song_volume=0.5):
         self.song, self.sr = sf.read(str(song_path), dtype="float32", always_2d=True)
         if self.song.shape[1] == 1:
             self.song = np.repeat(self.song, 2, axis=1)
