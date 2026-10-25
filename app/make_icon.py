@@ -1,14 +1,17 @@
-"""Draws the Vocalworks icon (app/assets/vocalworks.png and .ico). Run again after changing the design.
+"""Draws the Vocalworks icon (app/assets/vocalworks.png and .ico) and the wide capsule image used in
+READMEs (app/assets/vocalworks-capsule.png). Run again after changing the design.
 
   .venv\\Scripts\\python.exe -m app.make_icon
 """
 from pathlib import Path
 
 from PySide6.QtCore import QPointF, QRectF, Qt
-from PySide6.QtGui import QColor, QGuiApplication, QImage, QLinearGradient, QPainter, QPainterPath, QPen
+from PySide6.QtGui import (QColor, QFont, QFontMetricsF, QGuiApplication, QImage, QLinearGradient, QPainter,
+                           QPainterPath, QPen)
 
 ASSETS = Path(__file__).resolve().parent / "assets"
 SIZES = (16, 24, 32, 48, 64, 128, 256)
+CAPSULE = (920, 430)  # 2x the 460x215 Steam capsule ratio
 
 
 def draw(size):
@@ -61,12 +64,63 @@ def draw(size):
     return img
 
 
+def draw_capsule():
+    """Wide banner: the icon on the left, the name and a tagline on the right."""
+    w, h = CAPSULE
+    img = QImage(w, h, QImage.Format_ARGB32)
+    img.fill(Qt.transparent)
+    p = QPainter(img)
+    p.setRenderHint(QPainter.Antialiasing)
+    p.setRenderHint(QPainter.TextAntialiasing)
+
+    # background: the icon's blue-to-purple, a shade deeper so the icon tile stands out
+    grad = QLinearGradient(0, 0, w, h)
+    grad.setColorAt(0, QColor("#1565c0"))
+    grad.setColorAt(1, QColor("#6a1b9a"))
+    p.setPen(Qt.NoPen)
+    p.setBrush(grad)
+    p.drawRoundedRect(QRectF(0, 0, w, h), 40, 40)
+
+    # icon with a soft drop shadow
+    icon_size = 300
+    x, y = 56, (h - icon_size) / 2
+    tile = QRectF(x + 9, y + 9, icon_size - 18, icon_size - 18)  # the icon's rounded square inside its 256 grid
+    for i in range(12, 0, -1):
+        p.setBrush(QColor(20, 0, 60, 7))
+        p.drawRoundedRect(tile.adjusted(-i, -i + 10, i, i + 10), 66 + i, 66 + i)
+    p.drawImage(QPointF(x, y), draw(icon_size))
+
+    # name and tagline, shrunk to fit the space right of the icon
+    left = x + icon_size + 44
+    room = w - left - 56
+    title = QFont("Segoe UI", weight=QFont.Bold)
+    title.setPixelSize(104)
+    while QFontMetricsF(title).horizontalAdvance("Vocalworks") > room:
+        title.setPixelSize(title.pixelSize() - 2)
+    tag = QFont("Segoe UI Semibold")
+    tag.setPixelSize(32)
+    title_h = QFontMetricsF(title).height()
+    tag_h = QFontMetricsF(tag).lineSpacing() * 2
+    top = (h - title_h - 8 - tag_h) / 2
+    p.setPen(QColor("#ffffff"))
+    p.setFont(title)
+    p.drawText(QRectF(left, top, room, title_h), Qt.AlignLeft | Qt.AlignVCenter, "Vocalworks")
+    p.setPen(QColor(255, 255, 255, 200))
+    p.setFont(tag)
+    p.drawText(QRectF(left + 4, top + title_h + 8, room, tag_h), Qt.AlignLeft,
+               "Sing covers that sound\nlike the original")
+    p.end()
+    return img
+
+
 def main():
     QGuiApplication.instance() or QGuiApplication([])
     ASSETS.mkdir(exist_ok=True)
     draw(256).save(str(ASSETS / "vocalworks.png"))
     write_ico([draw(s) for s in SIZES], ASSETS / "vocalworks.ico")
+    draw_capsule().save(str(ASSETS / "vocalworks-capsule.png"))
     print(f"Wrote {ASSETS / 'vocalworks.png'} and {ASSETS / 'vocalworks.ico'} ({', '.join(map(str, SIZES))} px)")
+    print(f"Wrote {ASSETS / 'vocalworks-capsule.png'} ({CAPSULE[0]}x{CAPSULE[1]} px)")
 
 
 def write_ico(images, path):
