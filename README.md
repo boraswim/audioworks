@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="app/assets/vocalworks-capsule.png" alt="Vocalworks" width="460" />
+</p>
+
 # Vocalworks
 
 A Windows desktop app for singing covers. Pick a song, record yourself singing along, and get
