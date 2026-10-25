@@ -3,8 +3,7 @@ scipy
 librosa
 soundfile
 praat-parselmouth
-torch==2.7.1
-torchaudio==2.7.1
+torch==2.14.1
 demucs
 pyloudnorm
 soxr
