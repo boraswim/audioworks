@@ -51,4 +51,4 @@ A few principles shape every change:
 6. Open a pull request and fill in its template.
 
 By contributing, you agree that your contributions are licensed under the project's
-[GPL-3.0 license](LICENSE).
+[MIT License](LICENSE).

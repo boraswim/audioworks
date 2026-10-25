@@ -128,13 +128,15 @@ security problems privately, as described in [SECURITY.md](SECURITY.md).
 
 ## License
 
-Vocalworks is free software under the [GNU General Public License v3.0](LICENSE) (GPL-3.0): you may
-use, study, change and share it, and anything you share that's built on it must be released under the
-same license, with its source. Copyright (C) 2026 Bora Sevim.
+Vocalworks is released under the [MIT License](LICENSE): you may use, copy, change and share it,
+including in other projects, as long as the copyright notice comes along. Copyright (c) 2026 Bora Sevim.
+Versions up to 1.2.1 were released under GPL-3.0, and copies of those keep that licence.
 
-It's GPL because it builds on [Parselmouth](https://github.com/YannickJadoul/Parselmouth) (Praat), which
-is GPL-3.0. The other libraries it installs keep their own licenses (MIT, BSD, ISC, Apache, LGPL,
-Unlicense), all compatible with this one.
+The libraries the installer downloads keep their own licences. One of them,
+[Parselmouth](https://github.com/YannickJadoul/Parselmouth) (Praat), which Vocalworks uses for pitch
+tracking and correction, is GPL-3.0: if you distribute Vocalworks together with Parselmouth, for
+example as a ready-to-run bundle, that bundle has to follow the GPL. The others are MIT, BSD, ISC,
+Apache, LGPL or Unlicense.
 
 The license covers the app's code only. The songs you download or import stay subject to their
 rights holders' terms, and so does their use in the covers you make.
