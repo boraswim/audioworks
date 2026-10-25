@@ -353,7 +353,11 @@ class MainWindow(QMainWindow):
             self.out.addItem(name, i)
         self.rec_btn = QPushButton("Record")
         self.rec_btn.setMinimumHeight(36)
-        self.rec_btn.clicked.connect(self.toggle_record)
+        self.rec_btn.clicked.connect(self.record_with_song)
+        # the same, singing over the backing track alone (the instrumental "Prepare" split out)
+        self.rec_inst_btn = QPushButton("Record (instrumental)")
+        self.rec_inst_btn.setMinimumHeight(36)
+        self.rec_inst_btn.clicked.connect(self.record_with_instrumental)
         self.rec_time = QLabel("")
         self.meter = QProgressBar()
         self.meter.setRange(0, 100)
@@ -368,6 +372,7 @@ class MainWindow(QMainWindow):
         f.addRow("Level", self.meter)
         row = QHBoxLayout()
         row.addWidget(self.rec_btn)
+        row.addWidget(self.rec_inst_btn)
         row.addWidget(self.rec_time, 1)
         f.addRow("", row)
         v.addWidget(box)
@@ -670,24 +675,40 @@ class MainWindow(QMainWindow):
 
     # ------------------------------------------------------------ step 2
 
-    def toggle_record(self):
+    def record_with_song(self):
+        self.toggle_record(instrumental=False)
+
+    def record_with_instrumental(self):
+        self.toggle_record(instrumental=True)
+
+    def toggle_record(self, instrumental=False):
         if self.recorder is None:
             if not self.folder or not self.notes().get("recommended"):
                 QMessageBox.information(self, "Not ready", "Prepare the song first (step 1).")
+                return
+            # the instrumental is split from the song sample for sample, so a take sung over it lines up
+            # exactly like one sung over the original
+            backing = self.folder / ("song_instrumental.wav" if instrumental else "song.mp3")
+            if not backing.exists():
+                QMessageBox.information(self, "Not ready", "Prepare the song again (step 1): its "
+                                        "instrumental is missing.")
                 return
             if self.preview_timer.isActive():
                 self.toggle_preview()
             self.player.stop()
             take = pipeline.next_take(self.folder)
-            self.recorder = rec.Recorder(self.folder / "song.mp3", self.folder / f"{take}.wav",
+            self.recorder = rec.Recorder(backing, self.folder / f"{take}.wav",
                                          self.mic.currentData(), self.out.currentData(),
                                          song_volume=SONG_VOLUME_WHILE_SINGING)
+            self.recorder.backing = "instrumental" if instrumental else "original"
             self.recorder.start()
-            self.rec_btn.setText("Stop")
+            active, other = (self.rec_inst_btn, self.rec_btn) if instrumental else (self.rec_btn, self.rec_inst_btn)
+            active.setText("Stop")
+            other.setEnabled(False)
             self.timer = QTimer(self)
             self.timer.timeout.connect(self.tick)
             self.timer.start(50)
-            self.log(f"Recording {take}...")
+            self.log(f"Recording {take} over the {'instrumental' if instrumental else 'original song'}...")
         else:
             self.stop_record()
 
@@ -705,6 +726,9 @@ class MainWindow(QMainWindow):
         length = self.recorder.stop()
         peak = self.recorder.peak_db()
         self.log(f"Saved {self.recorder.out_path.name} ({length:.0f} s, loudest moment {peak:.1f} dBFS)")
+        notes = self.notes()  # which backing it was sung over, for reference
+        notes.setdefault("takes", {}).setdefault(self.recorder.out_path.stem, {})["recorded_over"] = self.recorder.backing
+        pipeline.songfile.save(self.folder, notes)
         if peak > -1:
             QMessageBox.warning(self, "Too loud", "Your recording touched full scale and may be distorted. "
                                 "Consider turning the mic down and recording again.")
@@ -713,6 +737,9 @@ class MainWindow(QMainWindow):
                                     "but turning the mic up a little gives a cleaner result.")
         self.recorder = None
         self.rec_btn.setText("Record")
+        self.rec_inst_btn.setText("Record (instrumental)")
+        self.rec_btn.setEnabled(True)
+        self.rec_inst_btn.setEnabled(True)
         self.meter.setValue(0)
         self.load_song(self.folder)
 
