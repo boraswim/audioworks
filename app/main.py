@@ -6,7 +6,7 @@ import soundfile as sf
 import traceback
 from pathlib import Path
 
-from PySide6.QtCore import QObject, Qt, QThread, QTimer, QUrl, Signal
+from PySide6.QtCore import QEvent, QObject, Qt, QThread, QTimer, QUrl, Signal
 from PySide6.QtGui import QFont, QIcon
 from PySide6.QtMultimedia import QAudioOutput, QMediaPlayer
 from PySide6.QtWidgets import (QApplication, QButtonGroup, QComboBox, QDialog, QFileDialog, QInputDialog,
@@ -23,6 +23,20 @@ from app import recorder as rec
 SONG_VOLUME_WHILE_SINGING = 0.5
 STATUS_TEXT = {"imported": "not prepared", "analyzed": "ready for vocals", "in progress": "in progress",
                "awaiting feedback": "cover ready", "approved": "approved", "on hold": "on hold"}
+
+
+def dark_mode():
+    """Whether Windows (and so the app) is using the dark theme."""
+    return QApplication.palette().window().color().lightness() < 128
+
+
+# text colors that read well on the window background: (light theme, dark theme)
+COLORS = {"faint": ("#8a8a8a", "#8c8c8c"), "current": ("#1565c0", "#64b5f6"), "next": ("#404040", "#d6d6d6"),
+          "status": ("#606060", "#a6a6a6"), "notice": ("#a06000", "#f0b050")}
+
+
+def color(name):
+    return COLORS[name][dark_mode()]
 
 
 class Worker(QObject):
@@ -52,8 +66,7 @@ class KaraokeView(QWidget):
         v = QVBoxLayout(self)
         v.addStretch(1)
         self.rows = []
-        for size, color, bold in ((12, "#8a8a8a", False), (22, "#1565c0", True), (14, "#404040", False),
-                                  (12, "#8a8a8a", False)):
+        for size, bold in ((12, False), (22, True), (14, False), (12, False)):
             lab = QLabel("")
             lab.setAlignment(Qt.AlignCenter)
             lab.setWordWrap(True)
@@ -61,11 +74,17 @@ class KaraokeView(QWidget):
             font.setPointSize(size)
             font.setBold(bold)
             lab.setFont(font)
-            lab.setStyleSheet(f"color: {color};")
             v.addWidget(lab)
             self.rows.append(lab)
         v.addStretch(1)
+        self.apply_theme()
         self.set_lines([])
+
+    def apply_theme(self):
+        # on the window's own background: a fixed light one showed as white bars behind each line in
+        # dark mode (Windows 11 style paints a stylesheet background only behind the labels)
+        for lab, name in zip(self.rows, ("faint", "current", "next", "faint")):
+            lab.setStyleSheet(f"color: {color(name)}; background: transparent;")
 
     def set_lines(self, lines):
         self.lines = [(t, w) for t, w in lines if w.strip()]
@@ -244,9 +263,21 @@ class MainWindow(QMainWindow):
         split.addWidget(right)
         split.setSizes([260, 840])
         self.setCentralWidget(split)
+        self.apply_theme()
         self.update_ai_button()
         self.refresh_songs()
         self.show_step(0)
+
+    def apply_theme(self):
+        """Colors that follow Windows' light or dark theme (also when it changes while the app is open)."""
+        self.karaoke.apply_theme()
+        self.lyrics_status.setStyleSheet(f"color: {color('status')};")
+        self.notice.setStyleSheet(f"color: {color('notice')};")
+
+    def changeEvent(self, event):
+        if event.type() in (QEvent.PaletteChange, QEvent.ThemeChange) and hasattr(self, "karaoke"):
+            self.apply_theme()
+        super().changeEvent(event)
 
     # ------------------------------------------------------------ step pages
 
@@ -266,7 +297,6 @@ class MainWindow(QMainWindow):
         self.notice = QLabel("Only download songs you have the rights to use. Downloading may be against the "
                              "platform's terms of service.")
         self.notice.setWordWrap(True)
-        self.notice.setStyleSheet("color: #a06000;")
         self.get_btn = QPushButton("Get song")
         self.get_btn.setMinimumHeight(32)
         self.get_btn.clicked.connect(self.get_song)
@@ -303,10 +333,8 @@ class MainWindow(QMainWindow):
         v = QVBoxLayout(box)
         self.karaoke = KaraokeView()
         self.karaoke.setMinimumHeight(220)
-        self.karaoke.setStyleSheet("background: #fafafa;")
         self.lyrics_status = QLabel("")
         self.lyrics_status.setWordWrap(True)
-        self.lyrics_status.setStyleSheet("color: #606060;")
         row1 = QHBoxLayout()
         self.preview_btn = QPushButton("Play song with lyrics")
         self.preview_btn.clicked.connect(self.toggle_preview)
