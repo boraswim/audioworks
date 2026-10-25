@@ -1,4 +1,4 @@
-"""Draws the Audioworks icon (app/assets/audioworks.png and .ico). Run again after changing the design.
+"""Draws the Vocalworks icon (app/assets/vocalworks.png and .ico). Run again after changing the design.
 
   .venv\\Scripts\\python.exe -m app.make_icon
 """
@@ -64,9 +64,9 @@ def draw(size):
 def main():
     QGuiApplication.instance() or QGuiApplication([])
     ASSETS.mkdir(exist_ok=True)
-    draw(256).save(str(ASSETS / "audioworks.png"))
-    write_ico([draw(s) for s in SIZES], ASSETS / "audioworks.ico")
-    print(f"Wrote {ASSETS / 'audioworks.png'} and {ASSETS / 'audioworks.ico'} ({', '.join(map(str, SIZES))} px)")
+    draw(256).save(str(ASSETS / "vocalworks.png"))
+    write_ico([draw(s) for s in SIZES], ASSETS / "vocalworks.ico")
+    print(f"Wrote {ASSETS / 'vocalworks.png'} and {ASSETS / 'vocalworks.ico'} ({', '.join(map(str, SIZES))} px)")
 
 
 def write_ico(images, path):

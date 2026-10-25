@@ -1,4 +1,4 @@
-"""Per-song notes: songs/<name>/audioworks.json.
+"""Per-song notes: songs/<name>/vocalworks.json.
 
 One file per song folder holding everything specific to that song, so work can resume
 without re-deriving it:
@@ -21,11 +21,16 @@ import json
 import sys
 from pathlib import Path
 
-NAME = "audioworks.json"
+NAME = "vocalworks.json"
+OLD_NAME = "audioworks.json"  # the app was called Audioworks until 2026-10-25
 
 
 def path(folder):
-    return Path(folder) / NAME
+    p = Path(folder) / NAME
+    old = Path(folder) / OLD_NAME
+    if not p.exists() and old.exists():
+        old.rename(p)  # songs from before the rename keep their notes
+    return p
 
 
 def load(folder):

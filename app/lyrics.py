@@ -15,7 +15,7 @@ import soundfile as sf
 import requests
 
 LRC = "lyrics.lrc"
-UA = {"User-Agent": "Audioworks (personal karaoke recorder)"}
+UA = {"User-Agent": "Vocalworks (personal karaoke recorder)"}
 TS = re.compile(r"\[(\d+):(\d+(?:\.\d+)?)\]")
 
 

@@ -1,8 +1,8 @@
 """Optional AI assistant: the user's own Gemini, ChatGPT/Codex or Claude plans each song's cover.
 
 The assistant runs through its official command-line app on this PC, signed in with the user's own
-account; Audioworks has no server and stores no keys. It's started only inside this project, with
-the Audioworks guide (assistant_skill.md) as its instructions, and may write one file: the song's
+account; Vocalworks has no server and stores no keys. It's started only inside this project, with
+the Vocalworks guide (assistant_skill.md) as its instructions, and may write one file: the song's
 assistant_plan.json. The engine checks that plan against the user's rules before using it, and
 without an assistant everything is decided from the measurements as before.
 """
@@ -19,7 +19,8 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "tools"))
 import songfile  # noqa: E402
 
-SETTINGS = ROOT / "audioworks_settings.json"
+SETTINGS = ROOT / "vocalworks_settings.json"
+OLD_SETTINGS = ROOT / "audioworks_settings.json"  # from before the rename to Vocalworks
 SKILL = "app/assistant_skill.md"
 PLAN = "assistant_plan.json"
 NO_WINDOW = subprocess.CREATE_NO_WINDOW if sys.platform == "win32" else 0
@@ -41,6 +42,8 @@ ASSISTANTS = {
 # ---------------------------------------------------------------- connection
 
 def load_settings():
+    if not SETTINGS.exists() and OLD_SETTINGS.exists():
+        OLD_SETTINGS.rename(SETTINGS)
     try:
         return json.loads(SETTINGS.read_text(encoding="utf-8"))
     except (OSError, ValueError):
@@ -167,8 +170,8 @@ def study(folder, log=print, key=None):
     plan_file = folder / PLAN
     plan_file.unlink(missing_ok=True)
     # one plain line: the command-line apps are .cmd files on Windows, where quotes and symbols break
-    prompt = (f"You are the Audioworks producer for the song in {rel}. Read {SKILL} and follow it. "
-              f"The measurements are in {rel}/audioworks.json. Write your plan to {rel}/{PLAN} and change no other file.")
+    prompt = (f"You are the Vocalworks producer for the song in {rel}. Read {SKILL} and follow it. "
+              f"The measurements are in {rel}/vocalworks.json. Write your plan to {rel}/{PLAN} and change no other file.")
     log(f"Asking {a['name']} to plan the cover (this can take a few minutes)...")
     try:
         code = run(key, prompt, log, light=True)
@@ -195,7 +198,7 @@ def study(folder, log=print, key=None):
     plan_file.unlink(missing_ok=True)
     log(f"{a['name']}'s plan: " + describe(plan))
     if dropped:
-        log("  ignored (outside Audioworks' rules): " + ", ".join(dropped))
+        log("  ignored (outside Vocalworks' rules): " + ", ".join(dropped))
     return plan
 
 

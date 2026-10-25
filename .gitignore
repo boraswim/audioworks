@@ -7,9 +7,11 @@ __pycache__/
 songs/
 
 # Runtime output
+vocalworks.log
 audioworks.log
 
 # Machine-specific shortcut (absolute paths); recreate it locally, see README
+Vocalworks.lnk
 Audioworks.lnk
 
 # Chat workflow with Claude (not part of the app)
@@ -20,4 +22,5 @@ tools/compare.py
 tools/harmony.py
 
 # Your connected AI assistant (machine-specific)
+vocalworks_settings.json
 audioworks_settings.json

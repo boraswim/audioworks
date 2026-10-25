@@ -2,7 +2,7 @@
 original vocal was produced, ending with recommended processing settings.
 
 Needs song.mp3 plus song_vocals.wav / song_instrumental.wav (run separate.py first).
-Saves the results into the song's audioworks.json (see songfile.py), keeping any notes there.
+Saves the results into the song's vocalworks.json (see songfile.py), keeping any notes there.
 
   python tools/analyze_song.py songs/<name>
 """

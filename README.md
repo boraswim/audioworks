@@ -1,4 +1,4 @@
-# Audioworks
+# Vocalworks
 
 A Windows desktop app for singing covers. Pick a song, record yourself singing along, and get
 back the song with your voice in it, processed to sound like the original vocal: pitch
@@ -30,20 +30,20 @@ covers (see below).
 
 ## Install
 
-1. Download `Audioworks-<version>-windows.zip` from the
-   [latest release](https://github.com/boraswim/audioworks/releases/latest) and unzip it where you want
+1. Download `Vocalworks-<version>-windows.zip` from the
+   [latest release](https://github.com/boraswim/vocalworks/releases/latest) and unzip it where you want
    the app to live (it keeps your songs in that folder too).
-2. Double-click **`Install Audioworks.bat`**. It installs Python 3.11 and the app's libraries into the
+2. Double-click **`Install Vocalworks.bat`**. It installs Python 3.11 and the app's libraries into the
    folder (about 3 GB with an NVIDIA GPU, which makes splitting songs much faster; less without one,
    where splitting takes several minutes), and adds Desktop and Start menu shortcuts.
-3. Start Audioworks from the shortcut. The vocal splitter's model (about 300 MB) downloads the first
+3. Start Vocalworks from the shortcut. The vocal splitter's model (about 300 MB) downloads the first
    time you prepare a song.
 
 Running the installer again repairs or updates the install.
 
 ### From source
 
-Requires Windows, Python 3.11 and [uv](https://docs.astral.sh/uv/). `Install Audioworks.bat` works in a
+Requires Windows, Python 3.11 and [uv](https://docs.astral.sh/uv/). `Install Vocalworks.bat` works in a
 clone too; or by hand:
 
 ```
@@ -51,7 +51,7 @@ uv venv .venv --python 3.11
 uv pip install --python .venv\Scripts\python.exe -r requirements.txt --extra-index-url https://download.pytorch.org/whl/cu126 --index-strategy unsafe-best-match
 ```
 
-Then start the app with `Audioworks.bat` or `.venv\Scripts\pythonw.exe -m app`.
+Then start the app with `Vocalworks.bat` or `.venv\Scripts\pythonw.exe -m app`.
 
 ## AI assistant (optional)
 
@@ -59,16 +59,16 @@ Click **Connect AI assistant** (above "+ New song") to let an assistant you alre
 covers: **Gemini** (Google account), **ChatGPT / Codex** (ChatGPT account) or **Claude** (Claude
 account). The dialog installs the assistant's official command-line app (needs
 [Node.js](https://nodejs.org)) and opens its sign-in; your account stays with that app on your PC, and
-Audioworks has no server and stores no keys.
+Vocalworks has no server and stores no keys.
 
-Once connected, **Prepare with ...** in step 1 ends with the assistant reading the measurements and the Audioworks
+Once connected, **Prepare with ...** in step 1 ends with the assistant reading the measurements and the Vocalworks
 guide (`app/assistant_skill.md`), adding what it knows about the record, and writing a plan: pitch
 correction, de-essing, tone, hiss, distortion, double-tracking, vocoder and your vocal level. The app
 checks the plan against the same rules (for example, pitch correction never moves a note more than
 1.5 semitones) and builds the cover from it. Plain **Prepare** leaves the assistant out, and "Prepare
 again with ..." re-plans a song.
 The assistant may only write its plan file; the AI itself runs on its company's servers.
-To go easy on your plan's limits, Audioworks asks for each assistant's lighter model (Gemini Flash,
+To go easy on your plan's limits, Vocalworks asks for each assistant's lighter model (Gemini Flash,
 GPT-6 Luna, Claude Sonnet) and falls back to its default model if that one isn't available. Without an
 assistant, everything is decided automatically from the measurements.
 
@@ -83,12 +83,12 @@ song_instrumental.wav         the backing track
 take1.wav, take2.wav ...      your recordings (always kept)
 my_vocal_processed.wav        your finished vocal
 <song_name>_my_cover.wav/.mp3 your cover
-audioworks.json               the song's notes: analysis, settings, takes, results, status
+vocalworks.json               the song's notes: analysis, settings, takes, results, status
 lyrics.lrc                    synced lyrics for the karaoke view
 ```
 
 While a cover is being made, working files (`takeN_aligned.wav`, `takeN_tuned.wav`, ...) appear
-alongside; "Sounds good" moves them to the Recycle Bin. The app writes a log to `audioworks.log`.
+alongside; "Sounds good" moves them to the Recycle Bin. The app writes a log to `vocalworks.log`.
 
 ## Code
 
@@ -122,7 +122,7 @@ security problems privately, as described in [SECURITY.md](SECURITY.md).
 
 ## License
 
-Audioworks is free software under the [GNU General Public License v3.0](LICENSE) (GPL-3.0): you may
+Vocalworks is free software under the [GNU General Public License v3.0](LICENSE) (GPL-3.0): you may
 use, study, change and share it, and anything you share that's built on it must be released under the
 same license, with its source. Copyright (C) 2026 Bora Sevim.
 

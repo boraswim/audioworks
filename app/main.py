@@ -1,4 +1,4 @@
-"""Audioworks desktop app: pick a song, record or upload your vocal, download your cover."""
+"""Vocalworks desktop app: pick a song, record or upload your vocal, download your cover."""
 import shutil
 import sys
 
@@ -100,9 +100,9 @@ class AssistantDialog(QDialog):
         v = QVBoxLayout(self)
         intro = QLabel(
             "Optional. Connect an AI assistant you already use and it will study each new song with the "
-            "Audioworks guide and plan your cover; the app then builds the cover from that plan, checked "
+            "Vocalworks guide and plan your cover; the app then builds the cover from that plan, checked "
             "against the same rules. It runs through the assistant's official app on this PC, signed in "
-            "with your own account, and Audioworks only starts it inside its own folder. The assistant "
+            "with your own account, and Vocalworks only starts it inside its own folder. The assistant "
             "itself works online. Without one, everything is decided automatically from the measurements.")
         intro.setWordWrap(True)
         v.addWidget(intro)
@@ -180,7 +180,7 @@ class AssistantDialog(QDialog):
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("Audioworks")
+        self.setWindowTitle("Vocalworks")
         self.resize(1100, 720)
         self.folder = None
         self.thread = None
@@ -445,7 +445,7 @@ class MainWindow(QMainWindow):
 
     def log(self, line):
         self.log_view.appendPlainText(line)
-        print(line, flush=True)  # also lands in audioworks.log
+        print(line, flush=True)  # also lands in vocalworks.log
 
     def run(self, fn, on_done, label):
         if self.thread is not None:
@@ -823,7 +823,7 @@ class MainWindow(QMainWindow):
         self.run(lambda log: pipeline.approve(folder, log), lambda _: self.refresh_songs(folder), "Tidying up")
 
 
-LOG_FILE = pipeline.ROOT / "audioworks.log"
+LOG_FILE = pipeline.ROOT / "vocalworks.log"
 
 
 def setup_logging():
@@ -831,7 +831,7 @@ def setup_logging():
     import faulthandler
 
     log = open(LOG_FILE, "a", encoding="utf-8", buffering=1)
-    log.write(f"\n===== Audioworks started {__import__('datetime').datetime.now():%Y-%m-%d %H:%M:%S} =====\n")
+    log.write(f"\n===== Vocalworks started {__import__('datetime').datetime.now():%Y-%m-%d %H:%M:%S} =====\n")
     if sys.stdout is None:
         sys.stdout = log
     if sys.stderr is None:
@@ -841,20 +841,20 @@ def setup_logging():
     def excepthook(kind, value, tb):
         text = "".join(traceback.format_exception(kind, value, tb))
         log.write(text)
-        QMessageBox.critical(None, "Audioworks error", f"{value}\n\nDetails are in {LOG_FILE.name}.")
+        QMessageBox.critical(None, "Vocalworks error", f"{value}\n\nDetails are in {LOG_FILE.name}.")
 
     sys.excepthook = excepthook
     return log
 
 
-ICON = Path(__file__).resolve().parent / "assets" / "audioworks.ico"
+ICON = Path(__file__).resolve().parent / "assets" / "vocalworks.ico"
 
 
-APP_ID = "Audioworks.DesktopApp"
+APP_ID = "Vocalworks.DesktopApp"
 
 
 def set_taskbar_identity(hwnd):
-    """Give the window its own taskbar identity with the Audioworks icon, name and relaunch command.
+    """Give the window its own taskbar identity with the Vocalworks icon, name and relaunch command.
 
     The process-wide app ID alone isn't enough: Windows then looks for a Start menu shortcut carrying
     that ID, finds none, and shows a blank icon. These window properties tell it directly (they're also
@@ -894,7 +894,7 @@ def set_taskbar_identity(hwnd):
                 f'from app.main import main;main()"')
     # System.AppUserModel.*: RelaunchCommand 2, RelaunchIconResource 3, RelaunchDisplayNameResource 4, ID 5;
     # the ID goes last, once the rest is in place
-    for pid, text in ((2, relaunch), (3, f"{ICON},0"), (4, "Audioworks"), (5, APP_ID)):
+    for pid, text in ((2, relaunch), (3, f"{ICON},0"), (4, "Vocalworks"), (5, APP_ID)):
         buf = ctypes.create_unicode_buffer(text)
         pv = PROPVARIANT(vt=31, value=ctypes.cast(buf, ctypes.c_void_p))  # VT_LPWSTR; SetValue copies it
         set_value(store, ctypes.byref(PROPERTYKEY(guid("9F4C2855-9F79-4B39-A8D0-E1D42DE1D5F3"), pid)),
@@ -911,7 +911,7 @@ def main():
         ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(APP_ID)
     app = QApplication(sys.argv)
     app.setWindowIcon(QIcon(str(ICON)))
-    app.setApplicationName("Audioworks")
+    app.setApplicationName("Vocalworks")
     w = MainWindow()
     if sys.platform == "win32":
         try:

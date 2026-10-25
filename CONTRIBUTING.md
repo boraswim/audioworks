@@ -1,4 +1,4 @@
-# Contributing to Audioworks
+# Contributing to Vocalworks
 
 Thanks for helping. Bug reports, fixes and ideas are all welcome. Please follow the
 [code of conduct](CODE_OF_CONDUCT.md), and report security problems privately as described in
@@ -7,13 +7,13 @@ Thanks for helping. Bug reports, fixes and ideas are all welcome. Please follow 
 ## Reporting a bug
 
 Open an issue with the **Bug report** form. The most useful details are what you did, what happened,
-your Windows version and GPU, and the end of `audioworks.log` (in the app's folder). Please don't attach
+your Windows version and GPU, and the end of `vocalworks.log` (in the app's folder). Please don't attach
 songs, recordings or lyrics: they're copyrighted or personal, and the log is enough.
 
 ## Setting up
 
-Audioworks is a Windows app in Python 3.11 with [uv](https://docs.astral.sh/uv/). In a clone, run
-`Install Audioworks.bat`, or by hand:
+Vocalworks is a Windows app in Python 3.11 with [uv](https://docs.astral.sh/uv/). In a clone, run
+`Install Vocalworks.bat`, or by hand:
 
 ```
 uv venv .venv --python 3.11

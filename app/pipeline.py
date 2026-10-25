@@ -1,13 +1,13 @@
-"""Audioworks engine: runs the tools/ pipeline with per-song rules. Settings come from measuring the
+"""Vocalworks engine: runs the tools/ pipeline with per-song rules. Settings come from measuring the
 original, or from the plan of the user's connected AI assistant (app/assistant.py), checked against
 the same rules; nobody adjusts anything by hand.
 
-The same song folders and audioworks.json notes are used by the desktop app and by the
-chat workflow (the audioworks skill), so a song can move between them.
+The same song folders and vocalworks.json notes are used by the desktop app and by the
+chat workflow (the vocalworks skill), so a song can move between them.
 
 Song folder:  songs/<name>/song.mp3, song_vocals.wav, song_instrumental.wav, takeN.wav,
               takeN_* intermediates, my_vocal_processed.wav, <name>_my_cover.wav/.mp3,
-              audioworks.json
+              vocalworks.json
 """
 import json
 import re
@@ -27,7 +27,7 @@ import songfile  # noqa: E402
 
 AUDIO_EXTS = {".mp3", ".wav", ".flac", ".ogg", ".m4a", ".aac", ".opus", ".webm", ".wma", ".aiff", ".aif"}
 KEEP = re.compile(r"^(song\.mp3|song_vocals\.wav|song_instrumental\.wav|take\d+\.wav|my_vocal_processed\.wav"
-                  r"|.+_my_cover\.(wav|mp3)|audioworks\.json|lyrics\.lrc)$")
+                  r"|.+_my_cover\.(wav|mp3)|vocalworks\.json|audioworks\.json|lyrics\.lrc)$")
 
 
 class PipelineError(RuntimeError):

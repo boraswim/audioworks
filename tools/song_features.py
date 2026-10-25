@@ -10,7 +10,7 @@ Two sources:
 Hard autotune, distortion, width and hiss are measured by analyze_song.py; mentions of those
 here are reported alongside the measurement for comparison, not used to override it.
 
-Saves a "features" section into the song's audioworks.json (see songfile.py).
+Saves a "features" section into the song's vocalworks.json (see songfile.py).
 
   python tools/song_features.py songs/<name> [--offline]
 """
@@ -30,7 +30,7 @@ warnings.filterwarnings("ignore")
 
 API = "https://en.wikipedia.org/w/api.php"
 # Wikimedia rate-limits anonymous clients that don't say who they are
-UA = {"User-Agent": "Audioworks/1.0 (https://github.com/boraswim/audioworks)"}
+UA = {"User-Agent": "Vocalworks/1.0 (https://github.com/boraswim/vocalworks)"}
 TERMS = {
     "vocoder": r"vocoder|vocoded",
     "talk box": r"talk ?box",
