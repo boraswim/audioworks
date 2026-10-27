@@ -386,6 +386,11 @@ class MainWindow(QMainWindow):
         self.rec_inst_btn = QPushButton("Record (instrumental)")
         self.rec_inst_btn.setMinimumHeight(36)
         self.rec_inst_btn.clicked.connect(self.record_with_instrumental)
+        # appears once the last lyric line has been sung, so the singer needn't wait out the outro
+        self.finish_btn = QPushButton("Finish early (lyrics done)")
+        self.finish_btn.setMinimumHeight(36)
+        self.finish_btn.clicked.connect(self.finish_early)
+        self.finish_btn.setVisible(False)
         self.rec_time = QLabel("")
         self.meter = QProgressBar()
         self.meter.setRange(0, 100)
@@ -401,6 +406,7 @@ class MainWindow(QMainWindow):
         row = QHBoxLayout()
         row.addWidget(self.rec_btn)
         row.addWidget(self.rec_inst_btn)
+        row.addWidget(self.finish_btn)
         row.addWidget(self.rec_time, 1)
         f.addRow("", row)
         v.addWidget(box)
@@ -729,6 +735,8 @@ class MainWindow(QMainWindow):
                                          self.mic.currentData(), self.out.currentData(),
                                          song_volume=SONG_VOLUME_WHILE_SINGING)
             self.recorder.backing = "instrumental" if instrumental else "original"
+            self.finish_at = lyrics.sung_end(self.karaoke.lines,
+                                             self.notes().get("analysis", {}).get("vocal_sections"))
             self.recorder.start()
             active, other = (self.rec_inst_btn, self.rec_btn) if instrumental else (self.rec_btn, self.rec_inst_btn)
             active.setText("Stop")
@@ -746,7 +754,16 @@ class MainWindow(QMainWindow):
         self.karaoke.show_time(r.song_time)
         self.rec_time.setText(f"{int(r.seconds) // 60}:{int(r.seconds) % 60:02d} / "
                               f"{int(r.length) // 60}:{int(r.length) % 60:02d}")
+        song_left = r.length - r.preroll - r.song_time
+        self.finish_btn.setVisible(self.finish_at is not None and r.song_time >= self.finish_at and song_left > 2)
         if r.done.is_set():
+            self.stop_record()
+
+    def finish_early(self):
+        if self.recorder is not None:
+            t = self.recorder.song_time
+            self.log(f"Lyrics done: finishing at {int(t) // 60}:{int(t) % 60:02d} instead of waiting for the "
+                     "end of the song")
             self.stop_record()
 
     def stop_record(self):
@@ -764,6 +781,7 @@ class MainWindow(QMainWindow):
             QMessageBox.information(self, "Quite quiet", "Your recording is very quiet. It will still work, "
                                     "but turning the mic up a little gives a cleaner result.")
         self.recorder = None
+        self.finish_btn.setVisible(False)
         self.rec_btn.setText("Record")
         self.rec_inst_btn.setText("Record (instrumental)")
         self.rec_btn.setEnabled(True)

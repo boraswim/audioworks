@@ -62,6 +62,24 @@ def line_at(lines, t):
     return i
 
 
+def sung_end(lines, sections):
+    """When the last lyric line has been sung (song seconds), or None without lyrics.
+
+    LRC times only say when a line starts, so the end of the original singer's vocal section that
+    holds the last line stands in for when it ends ("3:50-3:56" strings from the song's analysis).
+    A section with no lyric in it, like a hum after the last verse, doesn't count."""
+    lines = [(t, w) for t, w in lines if w.strip()]
+    if not lines:
+        return None
+    last = lines[-1][0]
+    clock = lambda s: int(s.split(":")[0]) * 60 + int(s.split(":")[1])  # noqa: E731
+    for sec in sections or []:
+        start, end = (clock(x) for x in sec.split("-"))
+        if start - 2 <= last <= end:  # lyric times can run a little ahead of the measured section
+            return max(end, last) + 1.0
+    return last + 4.0
+
+
 # ---------------------------------------------------------------- LRCLIB
 
 def fetch_lrclib(artist, title, duration=None, album=None):

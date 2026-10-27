@@ -27,7 +27,8 @@ covers (see below).
 2. **Vocals**: record in the app. The song plays in your headphones at half volume (so you can hear
    yourself) while your mic records, with a one-second count-in, and the lyrics scroll karaoke-style.
    **Record** plays the original song; **Record (instrumental)** plays just the backing track, without
-   the original singer, and the take lines up with the song just the same. Or upload a recording you made yourself
+   the original singer, and the take lines up with the song just the same. Once you've sung the last lyric
+   line, a **Finish early** button appears, so you needn't wait out the rest of the song. Or upload a recording you made yourself
    (start recording before you start the song).
 3. **Result**: click "Make my cover". There's nothing to set: pitch correction, timing, your vocal
    level and the vocal's effects (amp distortion, tape hiss, stereo width, vocoder) are all matched
