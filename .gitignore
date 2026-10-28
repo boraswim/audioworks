@@ -6,6 +6,9 @@ __pycache__/
 # Your songs, recordings and covers (personal data, and the songs are copyrighted)
 songs/
 
+# Vocal profiles: your voice and setup measurements and recordings (personal data)
+profiles/
+
 # Runtime output
 vocalworks.log
 audioworks.log

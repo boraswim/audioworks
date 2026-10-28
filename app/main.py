@@ -16,6 +16,7 @@ from PySide6.QtWidgets import (QApplication, QButtonGroup, QComboBox, QDialog, Q
 
 from app import assistant
 from app import lyrics
+from app import profiles
 from app import pipeline
 from app import recorder as rec
 
@@ -196,6 +197,326 @@ class AssistantDialog(QDialog):
         self.refresh()
 
 
+class NewProfileDialog(QDialog):
+    """Name a new profile (a singer on one setup) and pick its devices."""
+
+    def __init__(self, parent, mics, outs):
+        super().__init__(parent)
+        self.setWindowTitle("New vocal profile")
+        self.setMinimumWidth(520)
+        f = QFormLayout(self)
+        intro = QLabel("A profile is one singer on one setup: the mic, the room and how far you sing from the "
+                       "mic. Singing somewhere else or into another mic? Make a separate profile for it, and "
+                       "choose \"Same singer as\" so your voice carries over.")
+        intro.setWordWrap(True)
+        f.addRow(intro)
+        self.singer = QLineEdit()
+        self.singer.setPlaceholderText("Your name")
+        self.setup = QLineEdit()
+        self.setup.setPlaceholderText("e.g. Home, headset mic")
+        self.same = QComboBox()
+        self.same.addItem("No, a new singer", None)
+        for pid, name, _ in profiles.list_profiles():
+            self.same.addItem(name, pid)
+        self.mic, self.out = QComboBox(), QComboBox()
+        for box, items in ((self.mic, mics), (self.out, outs)):
+            for i in range(items.count()):
+                box.addItem(items.itemText(i), items.itemData(i))
+            box.setCurrentIndex(items.currentIndex())
+        f.addRow("Singer", self.singer)
+        f.addRow("Setup", self.setup)
+        f.addRow("Same singer as", self.same)
+        f.addRow("Microphone", self.mic)
+        f.addRow("Headphones", self.out)
+        bar = QHBoxLayout()
+        ok, cancel = QPushButton("Create and record"), QPushButton("Cancel")
+        ok.clicked.connect(self.check)
+        cancel.clicked.connect(self.reject)
+        bar.addStretch(1)
+        bar.addWidget(cancel)
+        bar.addWidget(ok)
+        f.addRow(bar)
+
+    def check(self):
+        if not self.singer.text().strip() or not self.setup.text().strip():
+            QMessageBox.information(self, "Names needed", "Give the singer and the setup a name.")
+            return
+        self.accept()
+
+
+class CalibrationDialog(QDialog):
+    """The guided recording: six short recordings, each measured straight away."""
+
+    def __init__(self, parent, profile, mic, out):
+        super().__init__(parent)
+        self.profile, self.mic, self.out = profile, mic, out
+        self.recorder = self.schedule = None
+        self.latency = 0.0
+        self.setWindowTitle(f"Record the profile: {profiles.display_name(profile)}")
+        self.setMinimumSize(760, 460)
+        h = QHBoxLayout(self)
+        self.steps = QListWidget()
+        self.steps.setMaximumWidth(210)
+        self.steps.currentRowChanged.connect(self.show_step)
+        h.addWidget(self.steps)
+        right = QVBoxLayout()
+        h.addLayout(right, 1)
+        self.title = QLabel()
+        self.title.setFont(QFont(self.title.font().family(), 13, QFont.Bold))
+        self.say = QLabel()
+        self.say.setWordWrap(True)
+        self.big = QLabel()
+        self.big.setAlignment(Qt.AlignCenter)
+        self.big.setWordWrap(True)
+        big_font = QFont(self.big.font())
+        big_font.setPointSize(18)
+        self.big.setFont(big_font)
+        self.meter = QProgressBar()
+        self.meter.setRange(0, 100)
+        self.meter.setTextVisible(False)
+        self.result_label = QLabel()
+        self.result_label.setWordWrap(True)
+        tip = QLabel("Wear headphones, and keep the mic and your distance from it the same as when you sing "
+                     "songs: the profile describes exactly that setup.")
+        tip.setWordWrap(True)
+        tip.setStyleSheet(f"color: {color('status')};")
+        self.rec = QPushButton("Record")
+        self.rec.setMinimumHeight(34)
+        self.rec.clicked.connect(self.toggle)
+        self.next = QPushButton("Next step  ->")
+        self.next.clicked.connect(self.go_next)
+        for w in (self.title, self.say, self.big, self.meter, self.result_label):
+            right.addWidget(w)
+        right.addStretch(1)
+        right.addWidget(tip)
+        bar = QHBoxLayout()
+        bar.addWidget(self.rec)
+        bar.addStretch(1)
+        bar.addWidget(self.next)
+        right.addLayout(bar)
+        self.timer = QTimer(self)
+        self.timer.timeout.connect(self.tick)
+        self.refresh_list()
+        first = next((i for i, st in enumerate(profiles.STEPS) if st["id"] not in profile["calibration"]), 0)
+        self.steps.setCurrentRow(first)
+        self.show_step(first)
+
+    def refresh_list(self):
+        row = self.steps.currentRow()
+        self.steps.blockSignals(True)
+        self.steps.clear()
+        for st in profiles.STEPS:
+            cal = self.profile["calibration"].get(st["id"])
+            mark = "  (carried over)" if cal and cal.get("carried_from") else ""
+            self.steps.addItem(("\u2713 " if cal else "    ") + st["title"] + mark)
+        if row >= 0:
+            self.steps.setCurrentRow(row)
+        self.steps.blockSignals(False)
+
+    def current(self):
+        return profiles.STEPS[max(self.steps.currentRow(), 0)]
+
+    def show_step(self, i):
+        if i < 0 or self.recorder is not None:
+            return
+        st = profiles.STEPS[i]
+        self.title.setText(f"Step {i + 1} of {len(profiles.STEPS)}: {st['title']}")
+        self.say.setText(st["say"])
+        self.big.setText(st["big"])
+        done = st["id"] in self.profile["calibration"]
+        self.rec.setText("Record again" if done else "Record")
+        self.result_label.setText("Done. You can record it again, or go on." if done else "")
+        self.next.setText("Finish" if i == len(profiles.STEPS) - 1 else "Next step  ->")
+        self.next.setEnabled(done)
+
+    def toggle(self):
+        if self.recorder is not None:  # cancel: nothing is kept
+            self.timer.stop()
+            self.recorder.stream.stop()
+            self.recorder.stream.close()
+            self.recorder = None
+            self.meter.setValue(0)
+            self.rec.setText("Record")
+            self.result_label.setText("Cancelled.")
+            self.steps.setEnabled(True)
+            return
+        st = self.current()
+        play, self.schedule = profiles.backing(st["id"], self.profile)
+        path = profiles.clip_path(self.profile, st["id"])
+        path.parent.mkdir(parents=True, exist_ok=True)
+        self.recorder = rec.Recorder(play, path, self.mic, self.out, preroll=profiles.PREROLL, song_volume=1.0,
+                                     sr=profiles.SR)
+        self.recorder.start()
+        self.rec.setText("Cancel")
+        self.next.setEnabled(False)
+        self.steps.setEnabled(False)
+        self.result_label.setText("Recording...")
+        self.timer.start(50)
+
+    def tick(self):
+        r = self.recorder
+        self.meter.setValue(min(100, int(r.level * 300)))
+        if r.done.is_set():
+            self.timer.stop()
+            self.latency = float(sum(r.stream.latency)) if r.stream is not None else 0.0
+            r.stop()
+            self.recorder = None
+            self.meter.setValue(0)
+            self.steps.setEnabled(True)
+            self.measure()
+
+    def measure(self):
+        step = self.current()["id"]
+        QApplication.setOverrideCursor(Qt.WaitCursor)
+        try:
+            _, message, ok = profiles.measure_step(self.profile, step, self.schedule, self.latency)
+        finally:
+            QApplication.restoreOverrideCursor()
+        if not ok:
+            self.profile["calibration"].pop(step, None)
+            profiles.save(self.profile)
+        self.result_label.setText(("\u2713 " if ok else "Please record this again: ") + message)
+        self.rec.setText("Record again")
+        self.next.setEnabled(ok)
+        self.refresh_list()
+
+    def go_next(self):
+        i = self.steps.currentRow()
+        missing = [st for st in profiles.STEPS if st["id"] not in self.profile["calibration"]]
+        if i < len(profiles.STEPS) - 1:
+            self.steps.setCurrentRow(i + 1)
+        elif missing:
+            self.steps.setCurrentRow(profiles.STEPS.index(missing[0]))
+        else:
+            self.accept()
+
+    def reject(self):
+        if self.recorder is not None:
+            self.toggle()
+        super().reject()
+
+
+class ProfileDialog(QDialog):
+    """Vocal profiles: pick the active one, see what it knows, make new ones."""
+
+    def __init__(self, parent):
+        super().__init__(parent)
+        self.main = parent
+        self.setWindowTitle("Singer: vocal profiles")
+        self.setMinimumSize(780, 420)
+        v = QVBoxLayout(self)
+        intro = QLabel("A vocal profile describes one singer on one setup. Record it once with the guided "
+                       "recording; after that, every take you sing with it teaches it more. (For now profiles "
+                       "are learned and shown; they don't change how covers are made yet.)")
+        intro.setWordWrap(True)
+        v.addWidget(intro)
+        h = QHBoxLayout()
+        v.addLayout(h, 1)
+        self.list = QListWidget()
+        self.list.setMaximumWidth(270)
+        self.list.currentItemChanged.connect(self.show_card)
+        h.addWidget(self.list)
+        self.card = QLabel()
+        self.card.setWordWrap(True)
+        self.card.setAlignment(Qt.AlignTop | Qt.AlignLeft)
+        self.card.setTextInteractionFlags(Qt.TextSelectableByMouse)
+        box = QGroupBox("Your voice")
+        bv = QVBoxLayout(box)
+        bv.addWidget(self.card, 1)
+        h.addWidget(box, 1)
+        bar = QHBoxLayout()
+        self.new_btn = QPushButton("New profile...")
+        self.new_btn.clicked.connect(self.new_profile)
+        self.record_btn = QPushButton("Record the profile")
+        self.record_btn.clicked.connect(self.record)
+        self.use_btn = QPushButton("Sing as this profile")
+        self.use_btn.clicked.connect(self.use_selected)
+        self.none_btn = QPushButton("Sing without a profile")
+        self.none_btn.clicked.connect(self.use_none)
+        self.delete_btn = QPushButton("Delete...")
+        self.delete_btn.clicked.connect(self.delete)
+        close = QPushButton("Close")
+        close.clicked.connect(self.accept)
+        for w in (self.new_btn, self.record_btn, self.use_btn, self.none_btn, self.delete_btn):
+            bar.addWidget(w)
+        bar.addStretch(1)
+        bar.addWidget(close)
+        v.addLayout(bar)
+        self.refresh()
+
+    def selected(self):
+        item = self.list.currentItem()
+        return item.data(Qt.UserRole) if item else None
+
+    def refresh(self, select=None):
+        on = profiles.active()
+        select = select or self.selected() or on
+        self.list.blockSignals(True)
+        self.list.clear()
+        for pid, name, done in profiles.list_profiles():
+            item = QListWidgetItem(name + ("   (singing as)" if pid == on else "")
+                                   + ("" if done else "   (unfinished)"))
+            item.setData(Qt.UserRole, pid)
+            self.list.addItem(item)
+            if pid == select:
+                self.list.setCurrentItem(item)
+        if self.list.currentItem() is None and self.list.count():
+            self.list.setCurrentRow(0)
+        self.list.blockSignals(False)
+        self.none_btn.setEnabled(on is not None)
+        self.show_card()
+
+    def show_card(self, *_):
+        pid = self.selected()
+        p = profiles.load(pid) if pid else None
+        self.card.setText(profiles.describe(p) if p else "No profiles yet. Click \"New profile...\" to record one.")
+        for w in (self.record_btn, self.delete_btn):
+            w.setEnabled(p is not None)
+        self.record_btn.setText("Record the profile" if p and not profiles.complete(p) else "Record again...")
+        self.use_btn.setEnabled(bool(p and profiles.complete(p) and pid != profiles.active()))
+
+    def new_profile(self):
+        d = NewProfileDialog(self, self.main.mic, self.main.out)
+        if d.exec() != QDialog.Accepted:
+            return
+        p = profiles.new(d.singer.text(), d.setup.text(),
+                         {"mic": d.mic.currentText(), "headphones": d.out.currentText()}, d.same.currentData())
+        self.refresh(p["id"])
+        self.calibrate(p, d.mic.currentData(), d.out.currentData())
+
+    def record(self):
+        p = profiles.load(self.selected())
+        if p:
+            self.calibrate(p, self.main.mic.currentData(), self.main.out.currentData())
+
+    def calibrate(self, p, mic, out):
+        if self.main.recorder is not None:
+            QMessageBox.information(self, "Busy", "Finish the recording in step 2 first.")
+            return
+        CalibrationDialog(self, p, mic, out).exec()
+        p = profiles.load(p["id"])
+        if p and profiles.complete(p) and profiles.active() is None:
+            profiles.set_active(p["id"])  # the first finished profile becomes the one you sing as
+        self.refresh(p["id"] if p else None)
+
+    def use_selected(self):
+        profiles.set_active(self.selected())
+        self.refresh()
+
+    def use_none(self):
+        profiles.set_active(None)
+        self.refresh()
+
+    def delete(self):
+        p = profiles.load(self.selected())
+        if p and QMessageBox.question(self, "Delete profile", f"Move the profile {profiles.display_name(p)} and "
+                                      "its recordings to the Recycle Bin?") == QMessageBox.Yes:
+            if profiles.active() == p["id"]:
+                profiles.set_active(None)
+            profiles.delete(p["id"])
+            self.refresh()
+
+
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
@@ -214,6 +535,8 @@ class MainWindow(QMainWindow):
         self.songs.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         self.songs.setSpacing(2)
         self.songs.currentItemChanged.connect(self.select_song)
+        self.singer_btn = QPushButton()
+        self.singer_btn.clicked.connect(self.open_profiles)
         self.ai_btn = QPushButton()
         self.ai_btn.clicked.connect(self.connect_assistant)
         new_btn = QPushButton("+ New song")
@@ -225,6 +548,7 @@ class MainWindow(QMainWindow):
         title.setFont(QFont(title.font().family(), 12, QFont.Bold))
         lv.addWidget(title)
         lv.addWidget(self.songs)
+        lv.addWidget(self.singer_btn)
         lv.addWidget(self.ai_btn)
         lv.addWidget(new_btn)
 
@@ -264,6 +588,7 @@ class MainWindow(QMainWindow):
         split.setSizes([260, 840])
         self.setCentralWidget(split)
         self.apply_theme()
+        self.update_singer()
         self.update_ai_button()
         self.refresh_songs()
         self.show_step(0)
@@ -409,6 +734,9 @@ class MainWindow(QMainWindow):
         row.addWidget(self.finish_btn)
         row.addWidget(self.rec_time, 1)
         f.addRow("", row)
+        self.singing_as = QLabel()
+        self.singing_as.setWordWrap(True)
+        f.addRow("", self.singing_as)
         v.addWidget(box)
 
         up = QGroupBox("Or upload a recording")
@@ -604,6 +932,30 @@ class MainWindow(QMainWindow):
     def prepare_song_with_assistant(self):
         self.prepare_song(with_assistant=True)
 
+    def open_profiles(self):
+        ProfileDialog(self).exec()
+        self.update_singer()
+
+    def update_singer(self):
+        pid = profiles.active()
+        p = profiles.load(pid) if pid else None
+        name = profiles.display_name(p) if p else None
+        self.singer_btn.setText(f"Singer: {name}" if name else "Singer: create a vocal profile")
+        self.singing_as.setText(f"Singing as {name}: your takes teach this profile." if name else
+                                "No vocal profile: create one with \"Singer\" in the left panel, so your takes "
+                                "can teach it your voice.")
+        self.singing_as.setStyleSheet(f"color: {color('status')};")
+
+    def tag_take(self, take, uploaded=False):
+        """Note which profile a take was sung with, so processing it teaches that profile."""
+        pid = profiles.active()
+        if pid and take:
+            notes = self.notes()
+            tk = notes.setdefault("takes", {}).setdefault(take, {})
+            tk["profile"] = pid
+            tk["uploaded"] = uploaded
+            pipeline.songfile.save(self.folder, notes)
+
     def connect_assistant(self):
         AssistantDialog(self).exec()
         self.update_ai_button()
@@ -774,6 +1126,7 @@ class MainWindow(QMainWindow):
         notes = self.notes()  # which backing it was sung over, for reference
         notes.setdefault("takes", {}).setdefault(self.recorder.out_path.stem, {})["recorded_over"] = self.recorder.backing
         pipeline.songfile.save(self.folder, notes)
+        self.tag_take(self.recorder.out_path.stem)
         if peak > -1:
             QMessageBox.warning(self, "Too loud", "Your recording touched full scale and may be distorted. "
                                 "Consider turning the mic down and recording again.")
@@ -796,8 +1149,12 @@ class MainWindow(QMainWindow):
                                               "Audio (*.wav *.mp3 *.flac *.ogg *.m4a *.aac *.opus *.webm)")
         if path:
             folder = self.folder
-            self.run(lambda log: pipeline.add_take_file(folder, path, log), lambda _: self.load_song(folder),
+            self.run(lambda log: pipeline.add_take_file(folder, path, log), self.take_uploaded,
                      "Adding your recording")
+
+    def take_uploaded(self, take):
+        self.tag_take(take, uploaded=True)
+        self.load_song(self.folder)
 
     # ------------------------------------------------------------ step 3
 

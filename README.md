@@ -79,6 +79,26 @@ To go easy on your plan's limits, Vocalworks asks for each assistant's lighter m
 GPT-6 Luna, Claude Sonnet) and falls back to its default model if that one isn't available. Without an
 assistant, everything is decided automatically from the measurements.
 
+## Vocal profiles
+
+A vocal profile describes one singer on one setup: the mic, the room and how far you sing from the mic.
+Click **Singer** in the left panel, then **New profile...**, and the app guides you through six short
+recordings (about two minutes): room tone, your loudest phrase, your range, singing back reference notes,
+a soft-and-loud line, and a "ha!" for the room's echo. Each is measured straight away, and you're asked to
+record it again if something was off (too loud, too quiet, a bump in the silence).
+
+The **Your voice** card then shows what the app knows: your range, whether you tend to sing sharp or flat
+in your low, middle and high notes, how you start notes, your vibrato, how strong your "s" sounds are, and
+your setup's background noise, hum and room echo. After that, every take you sing as that profile teaches
+it more when you make the cover, and covers you approve count double. Takes that don't sound like the
+profile's setup only teach the voice part.
+
+Singing somewhere else or into another mic? Make a separate profile for that setup and choose **Same
+singer as** your first one: your voice carries over and only the setup is recorded again.
+
+Profiles are kept in `profiles/` next to your songs and never leave your PC. For now they are learned and
+shown, but don't change how covers are made yet; using them to improve covers comes next.
+
 ## Where things are kept
 
 Songs live in `songs/<song-name>/` (created automatically, not part of the repository):
@@ -105,6 +125,7 @@ alongside; "Sounds good" moves them to the Recycle Bin. The app writes a log to 
 | `app/pipeline.py` | The engine: import or download, prepare, process a take with per-song rules, export, tidy up |
 | `app/recorder.py` | In-app recording: plays the song and records the mic in one duplex audio stream |
 | `app/assistant.py`, `app/assistant_skill.md` | Optional AI assistant: connecting it, asking it for a plan, checking that plan; its guide |
+| `app/profiles.py` | Vocal profiles: the guided recording's measurements, learning from takes, the "Your voice" summary |
 | `app/lyrics.py` | Synced lyrics: LRCLIB lookup, LRC parsing, automatic sync to the song, timing for plain lyrics |
 | `app/make_icon.py` | Draws the app icon into `app/assets/` |
 | `tools/separate.py` | Splits a song into vocal and instrumental (Demucs) |

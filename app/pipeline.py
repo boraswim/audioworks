@@ -512,6 +512,10 @@ def process(folder, take, options=None, log=print):
                       "version": "vocoder" if voc else "main", "made_with": "app"}
     notes["status"] = "awaiting feedback"
     songfile.save(folder, notes)
+    if tk.get("profile"):  # sung with a vocal profile: this take teaches it (never affects the cover)
+        from app import profiles
+
+        profiles.learn(folder, take, tk["profile"], uploaded=bool(tk.get("uploaded")), log=log)
     return report
 
 
@@ -582,3 +586,9 @@ def approve(folder, log=print):
     for tk in notes.get("takes", {}).values():
         tk.pop("app_cache", None)  # intermediates are gone
     songfile.save(folder, notes)
+    final = notes.get("final", {}).get("take")
+    pid = notes.get("takes", {}).get(final, {}).get("profile")
+    if pid:  # an approved cover counts double in its profile
+        from app import profiles
+
+        profiles.mark_approved(folder, final, pid)

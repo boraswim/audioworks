@@ -37,8 +37,14 @@ def devices():
 
 
 class Recorder:
-    def __init__(self, song_path, out_path, input_device=None, output_device=None, preroll=1.0, song_volume=0.5):
-        self.song, self.sr = sf.read(str(song_path), dtype="float32", always_2d=True)
+    def __init__(self, song_path, out_path, input_device=None, output_device=None, preroll=1.0, song_volume=0.5,
+                 sr=None):
+        # song_path: an audio file, or already-made audio (a numpy array at `sr`, e.g. a vocal profile's
+        # reference notes)
+        if isinstance(song_path, np.ndarray):
+            self.song, self.sr = np.asarray(song_path, "float32").reshape(len(song_path), -1), sr
+        else:
+            self.song, self.sr = sf.read(str(song_path), dtype="float32", always_2d=True)
         if self.song.shape[1] == 1:
             self.song = np.repeat(self.song, 2, axis=1)
         self.song = self.song[:, :2] * song_volume
