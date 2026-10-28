@@ -1,6 +1,9 @@
 <p align="center">
   <img src="app/assets/vocalworks-capsule.png" alt="Vocalworks" width="460" />
 </p>
+<p align="center">
+  <a href="https://hub.xerj.org/contributors/boraswim"><img src="https://hub.xerj.org/contributors/boraswim/badge.svg" alt="XERJ Corpus Hub contributor" /></a>
+</p>
 
 # Vocalworks
 
@@ -8,6 +11,9 @@ A Windows desktop app for singing covers. Pick a song, record yourself singing a
 back the song with your voice in it, processed to sound like the original vocal: pitch
 correction, tone, compression, room, stereo width, distortion, tape hiss and loudness are all
 measured from the original and matched automatically.
+
+Vocalworks was selected for the [XERJ Corpus Hub](https://hub.xerj.org/contributors/boraswim), an open reference library that AI coding
+agents search before they write code.
 
 Everything runs on your own PC, with no account needed. The one machine-learning component, the
 vocal/instrumental splitter ([Demucs](https://github.com/facebookresearch/demucs)), runs locally;
