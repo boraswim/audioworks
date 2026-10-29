@@ -30,11 +30,12 @@ covers (see below).
    that measuring alone can't settle (a vocoder or talk box, from the song's Wikipedia article and the
    vocal itself), and looks up synced lyrics. With an AI assistant connected, **Prepare with ...** also
    has it plan the cover. Both buttons become "Prepare again" afterwards.
-2. **Vocals**: record in the app. The song plays in your headphones at half volume (so you can hear
-   yourself) while your mic records, with a one-second count-in, and the lyrics scroll karaoke-style.
+2. **Vocals**: record in the app. The song plays in your headphones while your mic records, with a one-second count-in, and the lyrics scroll karaoke-style.
    **Record** plays the original song; **Record (instrumental)** plays just the backing track, without
    the original singer, and the take lines up with the song just the same. Once you've sung the last lyric
-   line, a **Finish early** button appears, so you needn't wait out the rest of the song. Or upload a recording you made yourself
+   line, a **Finish early** button appears, so you needn't wait out the rest of the song.
+   Every play button has a **Volume** slider next to it, which starts at 100 each time you press play,
+   so you can turn the song down to hear yourself better. Or upload a recording you made yourself
    (start recording before you start the song).
 3. **Result**: click "Make my cover". There's nothing to set: pitch correction, timing, your vocal
    level and the vocal's effects (amp distortion, tape hiss, stereo width, vocoder) are all matched

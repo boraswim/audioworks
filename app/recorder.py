@@ -37,7 +37,7 @@ def devices():
 
 
 class Recorder:
-    def __init__(self, song_path, out_path, input_device=None, output_device=None, preroll=1.0, song_volume=0.5,
+    def __init__(self, song_path, out_path, input_device=None, output_device=None, preroll=1.0, song_volume=1.0,
                  sr=None):
         # song_path: an audio file, or already-made audio (a numpy array at `sr`, e.g. a vocal profile's
         # reference notes)
@@ -53,6 +53,7 @@ class Recorder:
         self.out_path = out_path
         self.device = (input_device, output_device)
         self.pos = 0
+        self.gain = 1.0  # playback volume on top of song_volume; changed while playing by the app's slider
         self.chunks = []
         self.level = 0.0  # mic level of the last block, 0-1, for a meter
         self.done = threading.Event()
@@ -74,7 +75,7 @@ class Recorder:
 
     def _callback(self, indata, outdata, frames, time, status):
         chunk = self.play[self.pos:self.pos + frames]
-        outdata[:len(chunk)] = chunk
+        outdata[:len(chunk)] = chunk * self.gain  # the volume slider, applied live
         outdata[len(chunk):] = 0
         self.chunks.append(indata[:, 0].copy())
         self.level = float(np.sqrt(np.mean(indata[:, 0] ** 2)))

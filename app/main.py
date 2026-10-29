@@ -12,7 +12,7 @@ from PySide6.QtMultimedia import QAudioOutput, QMediaPlayer
 from PySide6.QtWidgets import (QApplication, QButtonGroup, QComboBox, QDialog, QFileDialog, QInputDialog,
                                QFormLayout, QGridLayout, QGroupBox, QHBoxLayout, QLabel, QLineEdit, QListWidget,
                                QListWidgetItem, QMainWindow, QMessageBox, QPlainTextEdit, QProgressBar,
-                               QPushButton, QSplitter, QStackedWidget, QVBoxLayout, QWidget)
+                               QPushButton, QSlider, QSplitter, QStackedWidget, QVBoxLayout, QWidget)
 
 from app import assistant
 from app import lyrics
@@ -20,8 +20,6 @@ from app import profiles
 from app import pipeline
 from app import recorder as rec
 
-# step 2 plays the song at half volume (recording and the lyrics preview), so the singer hears themself
-SONG_VOLUME_WHILE_SINGING = 0.5
 STATUS_TEXT = {"imported": "not prepared", "analyzed": "ready for vocals", "in progress": "in progress",
                "awaiting feedback": "cover ready", "approved": "approved", "on hold": "on hold"}
 
@@ -195,6 +193,39 @@ class AssistantDialog(QDialog):
     def disconnect(self):
         assistant.disconnect()
         self.refresh()
+
+
+class VolumeSlider(QWidget):
+    """A volume slider for a play button: starts at 100 each time playback starts, changes it live.
+    `changed` carries the gain to apply (100 -> 1.0), on a curve that sounds even across the slider."""
+    changed = Signal(float)
+
+    def __init__(self):
+        super().__init__()
+        h = QHBoxLayout(self)
+        h.setContentsMargins(0, 0, 0, 0)
+        self.slider = QSlider(Qt.Horizontal)
+        self.slider.setRange(0, 100)
+        self.slider.setMinimumWidth(90)
+        self.slider.setToolTip("Volume")
+        self.value = QLabel()
+        self.value.setMinimumWidth(34)
+        h.addWidget(QLabel("Volume"))
+        h.addWidget(self.slider, 1)
+        h.addWidget(self.value)
+        self.slider.valueChanged.connect(self.moved)
+        self.reset()
+
+    def reset(self):
+        self.slider.setValue(100)
+        self.moved(100)
+
+    def moved(self, v):
+        self.value.setText(f"{v}%")
+        self.changed.emit(self.gain())
+
+    def gain(self):
+        return (self.slider.value() / 100) ** 2
 
 
 class NewProfileDialog(QDialog):
@@ -526,6 +557,7 @@ class MainWindow(QMainWindow):
         self.thread = None
         self.recorder = None
         self.player = QMediaPlayer()
+        self.playing = None  # which play button the shared player is serving: "preview" or "result"
         self.audio = QAudioOutput()
         self.player.setAudioOutput(self.audio)
 
@@ -669,6 +701,10 @@ class MainWindow(QMainWindow):
         later.clicked.connect(lambda: self.nudge_lyrics(0.25))
         for b in (self.preview_btn, earlier, later):
             row1.addWidget(b)
+        self.preview_volume = VolumeSlider()
+        self.preview_volume.changed.connect(self.set_preview_volume)
+        row_volume = QHBoxLayout()
+        row_volume.addWidget(self.preview_volume)
         row2 = QHBoxLayout()
         find = QPushButton("Find online")
         find.clicked.connect(self.find_lyrics)
@@ -681,6 +717,7 @@ class MainWindow(QMainWindow):
         v.addWidget(self.karaoke, 1)
         v.addWidget(self.lyrics_status)
         v.addLayout(row1)
+        v.addLayout(row_volume)
         v.addLayout(row2)
         self.preview_timer = QTimer(self)
         self.preview_timer.timeout.connect(
@@ -733,7 +770,10 @@ class MainWindow(QMainWindow):
         row.addWidget(self.rec_inst_btn)
         row.addWidget(self.finish_btn)
         row.addWidget(self.rec_time, 1)
+        self.rec_volume = VolumeSlider()  # the backing while recording
+        self.rec_volume.changed.connect(self.set_record_volume)
         f.addRow("", row)
+        f.addRow("", self.rec_volume)
         self.singing_as = QLabel()
         self.singing_as.setWordWrap(True)
         f.addRow("", self.singing_as)
@@ -790,6 +830,9 @@ class MainWindow(QMainWindow):
         stop.clicked.connect(self.player.stop)
         for b in (self.play_cover, self.play_vocal, stop):
             row.addWidget(b)
+        self.result_volume = VolumeSlider()
+        self.result_volume.changed.connect(self.set_result_volume)
+        row.addWidget(self.result_volume)
         row.addStretch(1)
         row2 = QHBoxLayout()
         self.save_cover = QPushButton("Download cover (WAV + MP3)...")
@@ -1046,6 +1089,18 @@ class MainWindow(QMainWindow):
         self.karaoke.set_lines(lyrics.load(self.folder))
         self.log(f"Lyrics moved {'earlier' if seconds < 0 else 'later'} (total {info['nudge_s']:+.2f} s)")
 
+    def set_preview_volume(self, gain):
+        if self.playing == "preview":
+            self.audio.setVolume(gain)
+
+    def set_result_volume(self, gain):
+        if self.playing == "result":
+            self.audio.setVolume(gain)
+
+    def set_record_volume(self, gain):
+        if self.recorder is not None:
+            self.recorder.gain = gain
+
     def toggle_preview(self):
         if self.preview_timer.isActive():
             self.player.stop()
@@ -1054,7 +1109,8 @@ class MainWindow(QMainWindow):
             self.karaoke.set_lines(self.karaoke.lines)
         elif self.folder:
             self.player.setSource(QUrl.fromLocalFile(str(self.folder / "song.mp3")))
-            self.audio.setVolume(SONG_VOLUME_WHILE_SINGING)
+            self.playing = "preview"
+            self.preview_volume.reset()
             self.player.play()
             self.preview_timer.start(50)
             self.preview_btn.setText("Stop preview")
@@ -1084,9 +1140,9 @@ class MainWindow(QMainWindow):
             self.player.stop()
             take = pipeline.next_take(self.folder)
             self.recorder = rec.Recorder(backing, self.folder / f"{take}.wav",
-                                         self.mic.currentData(), self.out.currentData(),
-                                         song_volume=SONG_VOLUME_WHILE_SINGING)
+                                         self.mic.currentData(), self.out.currentData(), song_volume=1.0)
             self.recorder.backing = "instrumental" if instrumental else "original"
+            self.rec_volume.reset()
             self.finish_at = lyrics.sung_end(self.karaoke.lines,
                                              self.notes().get("analysis", {}).get("vocal_sections"))
             self.recorder.start()
@@ -1223,7 +1279,8 @@ class MainWindow(QMainWindow):
         wav, _ = self.cover_files()
         path = wav if which == "cover" else self.folder / "my_vocal_processed.wav"
         self.player.setSource(QUrl.fromLocalFile(str(path)))
-        self.audio.setVolume(1.0)
+        self.playing = "result"
+        self.result_volume.reset()
         self.player.play()
 
     def download_cover(self):
